@@ -302,7 +302,7 @@ export async function fetchHolidayList(
   companyCode: string,
   corp_code: string,
   year: string,
-  emp_code: string
+  emp_code: string = ''
 ): Promise<HolidayListResult> {
   const params = new URLSearchParams({
     companyCode,

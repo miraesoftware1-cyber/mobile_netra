@@ -12,7 +12,7 @@ const querySchema = z.object({
   companyCode: isValidString,
   corp_code: isValidString,
   year: z.string().regex(/^\d{4}$/),
-  manage_dpt_codes: isValidString,
+  manage_dpt_codes: z.string(),
 });
 
 interface DepartmentHolidayListApiItem {

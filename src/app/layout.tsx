@@ -4,6 +4,7 @@ import "./globals.css";
 import Providers from "./providers";
 import PwaRegister from "@/components/pwa-register";
 import { FontSizeProvider } from "@/features/settings/components/font-size-provider";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,6 +57,7 @@ export default function RootLayout({
             <PwaRegister />
           </div>
         </div>
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

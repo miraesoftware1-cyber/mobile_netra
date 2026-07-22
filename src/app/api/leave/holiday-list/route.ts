@@ -7,7 +7,7 @@ const querySchema = z.object({
   companyCode: z.string().min(1),
   corp_code: z.string().min(1),
   year: z.string().regex(/^\d{4}$/),
-  emp_code: z.string().min(1),
+  emp_code: z.string(),
 });
 
 interface HolidayListApiItem {

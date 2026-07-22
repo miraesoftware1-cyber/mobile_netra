@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { fetchCompanyHolidays, fetchHolidayList } from "@/features/leave/api";
 import type { HolidayListItem } from "@/features/leave/api";
+import type { CalScdRow } from "@/app/api/schedule-crud/route";
 
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
@@ -57,6 +58,7 @@ function isHiddenPublicHolidayLabel(holidayName: string) {
 export default function CalendarPage() {
   const user = useAuthStore((s) => s.user);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [filter, setFilter] = useState<"all" | "휴가" | "일정">("all");
   const calendarYear = String(getYear(currentMonth));
 
   const { data: companyHolidays = [] } = useQuery({
@@ -99,6 +101,24 @@ export default function CalendarPage() {
       return result.items.filter(isLeaveConfirmed);
     },
     enabled: !!user?.companyCode && !!user?.corp_code && !!user?.emp_code,
+  });
+
+  const { data: mySchedules = [] } = useQuery<CalScdRow[]>({
+    queryKey: ["calendar-my-schedules", user?.companyCode, user?.emp_code, format(currentMonth, "yyyyMM")],
+    queryFn: async () => {
+      if (!user?.companyCode || !user?.emp_code) return [];
+      const params = new URLSearchParams({
+        companyCode: user.companyCode,
+        empCode: user.emp_code,
+        startDate: format(startOfMonth(currentMonth), "yyyyMMdd"),
+        endDate: format(endOfMonth(currentMonth), "yyyyMMdd"),
+      });
+      const res = await fetch(`/api/schedule-crud?${params.toString()}`);
+      if (!res.ok) return [];
+      const data: { items: CalScdRow[] } = await res.json();
+      return data.items ?? [];
+    },
+    enabled: !!user?.companyCode && !!user?.emp_code,
   });
 
   /** hdate "20260101" → { "2026-01-01": "신정" } Map (이름이 정기인 공휴일 제외) */
@@ -154,28 +174,65 @@ export default function CalendarPage() {
       .map(([dateStr, types]) => [dateStr, types.join(" · ")] as const);
   }, [myLeaveDayMap, monthPrefix]);
 
+  /** 본인 일정(CAL_SCD)의 날짜 → 존재 여부 Map (캘린더 dot용) */
+  const myScheduleDayMap = useMemo(() => {
+    const m = new Set<string>();
+    for (const item of mySchedules) {
+      const start = apiYmdToDate(item.beg_date);
+      const end = apiYmdToDate(item.end_date);
+      for (const d of eachDayOfInterval({ start, end })) {
+        m.add(format(d, "yyyy-MM-dd"));
+      }
+    }
+    return m;
+  }, [mySchedules]);
+
   type MonthEvent = {
     dateStr: string;
-    kind: "public" | "leave";
+    endDateStr?: string;
+    kind: "holiday" | "leave" | "schedule";
     title: string;
+    time?: string;
   };
 
   const monthEvents = useMemo((): MonthEvent[] => {
-    const publicEv: MonthEvent[] = monthHolidays.map(([dateStr, name]) => ({
+    const holidayEv: MonthEvent[] = monthHolidays.map(([dateStr, name]) => ({
       dateStr,
-      kind: "public" as const,
+      kind: "holiday" as const,
       title: name,
     }));
-    const leaveEv: MonthEvent[] = monthMyLeaveDays.map(([dateStr, title]) => ({
-      dateStr,
-      kind: "leave" as const,
-      title,
+
+    const leaveEv: MonthEvent[] = myLeaveItems
+      .filter((item) => apiYmdToIsoDate(item.year_bdate).startsWith(monthPrefix))
+      .map((item) => ({
+        dateStr: apiYmdToIsoDate(item.year_bdate),
+        endDateStr:
+          item.year_edate !== item.year_bdate
+            ? apiYmdToIsoDate(item.year_edate)
+            : undefined,
+        kind: "leave" as const,
+        title: item.holiday_typ,
+      }));
+
+    const scheduleEv: MonthEvent[] = mySchedules.map((item) => ({
+      dateStr: apiYmdToIsoDate(item.beg_date),
+      endDateStr:
+        item.end_date !== item.beg_date ? apiYmdToIsoDate(item.end_date) : undefined,
+      kind: "schedule" as const,
+      title: item.scd_name,
+      time: item.scd_time || undefined,
     }));
-    const merged = [...publicEv, ...leaveEv].sort((a, b) =>
+
+    return [...holidayEv, ...leaveEv, ...scheduleEv].sort((a, b) =>
       a.dateStr.localeCompare(b.dateStr),
     );
-    return merged;
-  }, [monthHolidays, monthMyLeaveDays]);
+  }, [monthHolidays, myLeaveItems, mySchedules, monthPrefix]);
+
+  const filteredEvents = useMemo(() => {
+    if (filter === "휴가") return monthEvents.filter((e) => e.kind === "leave");
+    if (filter === "일정") return monthEvents.filter((e) => e.kind === "schedule");
+    return monthEvents;
+  }, [monthEvents, filter]);
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
@@ -261,18 +318,15 @@ export default function CalendarPage() {
                   {format(day, "d")}
                 </span>
                 <div className="flex items-center justify-center gap-0.5 min-h-2 mt-0.5">
-                  {hasPublicHoliday ? (
-                    <span
-                      className="w-1 h-1 rounded-full bg-red-300 shrink-0"
-                      title="공휴일"
-                    />
-                  ) : null}
-                  {hasMyLeave ? (
-                    <span
-                      className="w-1 h-1 rounded-full bg-indigo-400 shrink-0"
-                      title="연차"
-                    />
-                  ) : null}
+                  {hasPublicHoliday && (
+                    <span className="w-1 h-1 rounded-full bg-red-300 shrink-0" />
+                  )}
+                  {hasMyLeave && (
+                    <span className="w-1 h-1 rounded-full bg-indigo-400 shrink-0" />
+                  )}
+                  {myScheduleDayMap.has(dayKey) && (
+                    <span className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: "#7abf82" }} />
+                  )}
                 </div>
               </div>
             );
@@ -289,68 +343,69 @@ export default function CalendarPage() {
           </span>
           {monthEvents.length > 0 && (
             <span className="text-xs font-medium text-white bg-gray-700 rounded-full px-2 py-0.5">
-              {monthEvents.length}건
+              {filteredEvents.length}건
             </span>
           )}
+          <div className="ml-auto flex items-center gap-1">
+            {(["all", "휴가", "일정"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  filter === f
+                    ? "bg-gray-700 text-white"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {f === "all" ? "전체" : f}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {monthEvents.length > 0 ? (
+        {filteredEvents.length > 0 ? (
           <div className="flex flex-col gap-2">
-            {monthEvents.map((ev) => (
-              <div
-                key={`${ev.dateStr}-${ev.kind}-${ev.title}`}
-                className={cn(
-                  "rounded-xl border px-4 py-3 shadow-sm flex items-center gap-3",
-                  ev.kind === "public" && "bg-red-50 border-red-100",
-                  ev.kind === "leave" && "bg-indigo-50 border-indigo-100",
-                )}
-              >
+            {filteredEvents.map((ev) => {
+              const isHoliday = ev.kind === "holiday";
+              const isLeave   = ev.kind === "leave";
+              const bg    = isHoliday ? "#fff1f2" : isLeave ? "#eef2ff" : "#edf7ee";
+              const bdr   = isHoliday ? "#fecdd3" : isLeave ? "#c7d2fe" : "#c8e6ca";
+              const dot   = isHoliday ? "#f87171" : isLeave ? "#6366f1" : "#7abf82";
+              const color = isHoliday ? "#ef4444" : isLeave ? "#6366f1" : "#4a9e5c";
+              const dateLabel = format(new Date(`${ev.dateStr}T12:00:00`), "M월 d일 (eee)", { locale: ko });
+              const endLabel = ev.endDateStr
+                ? ` ~ ${format(new Date(`${ev.endDateStr}T12:00:00`), "M월 d일 (eee)", { locale: ko })}`
+                : "";
+
+              return (
                 <div
-                  className={cn(
-                    "w-2 h-2 rounded-full flex-shrink-0",
-                    ev.kind === "public" && "bg-red-400",
-                    ev.kind === "leave" && "bg-indigo-500",
-                  )}
-                />
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span
-                    className={cn(
-                      "text-xs",
-                      ev.kind === "public" && "text-red-400",
-                      ev.kind === "leave" && "text-indigo-500",
-                    )}
-                  >
-                    {format(
-                      new Date(`${ev.dateStr}T12:00:00`),
-                      "M월 d일 (eee)",
-                      {
-                        locale: ko,
-                      },
-                    )}
-                    {ev.kind === "public" ? (
-                      <span className="text-gray-400 font-normal">
-                        {" "}
-                        · 공휴일
+                  key={`${ev.dateStr}-${ev.kind}-${ev.title}`}
+                  className="rounded-xl border px-4 py-3 shadow-sm flex items-center gap-3"
+                  style={{ backgroundColor: bg, borderColor: bdr }}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dot }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-xs truncate" style={{ color }}>
+                        {dateLabel}{endLabel}
+                        {isHoliday && <span className="text-gray-400 font-normal"> · 공휴일</span>}
                       </span>
-                    ) : null}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-sm font-medium break-words",
-                      ev.kind === "public" && "text-red-600",
-                      ev.kind === "leave" && "text-indigo-900",
-                    )}
-                  >
-                    {ev.title}
-                  </span>
+                      {ev.time ? (
+                        <span className="text-xs text-gray-800 shrink-0">{ev.time}</span>
+                      ) : null}
+                    </div>
+                    <p className="text-sm text-gray-900">{ev.title}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 px-4 py-6 shadow-sm flex flex-col items-center gap-2">
             <CalendarDays className="w-8 h-8 text-gray-200" />
-            <p className="text-sm text-gray-400">이번 달 일정이 없습니다</p>
+            <p className="text-sm text-gray-400">
+              {filter === "all" ? "이번 달 일정이 없습니다" : `이번 달 ${filter}이 없습니다`}
+            </p>
           </div>
         )}
         </div>

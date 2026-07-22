@@ -8,148 +8,204 @@ import {
   NotepadText,
   CalendarCheck,
   CalendarSearch,
+  CalendarPlus,
   Wallet,
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  HardHat,
+  UserPlus,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { useMenuStore } from "@/features/menu/use-menu-store";
 import { isDepartmentLeader } from "@/features/auth/lib/is-department-leader";
+import type { MenuDBItem } from "@/app/api/menu-visibility/route";
 
-const MENU_ITEMS = [
-  {
-    id: 1,
-    group: "leave",
-    title: "연차/휴가 신청",
-    description: "연차/휴가를 신청하세요",
-    icon: TicketsPlane,
-    href: "/leave/request",
-  },
-  {
-    id: 2,
-    group: "leave",
-    title: "연차/휴가 승인",
-    description: "신청된 연차/휴가를 승인하세요",
-    icon: CalendarCheck,
-    href: "/leave/approval",
-    leaderOnly: true,
-  },
-  {
-    id: 3,
-    group: "leave",
-    title: "연차/휴가 조회",
-    description: "신청한 연차/휴가 내역을 확인하세요",
-    icon: NotepadText,
-    href: "/leave/history",
-  },
-  {
-    id: 6,
-    group: "leave",
-    title: "연차/휴가 조회 (부서장)",
-    description: "내 부서의 연차/휴가 신청 내역을 조회하세요",
-    icon: CalendarSearch,
-    href: "/leave/department-history",
-    leaderOnly: true,
-  },
-  {
-    id: 4,
-    group: "expense",
-    title: "지출결의 등록",
-    description: "개인카드/현금 지출 결의서를 작성하세요",
-    icon: Wallet,
-    href: "/expense/request",
-  },
-  {
-    id: 5,
-    group: "expense",
-    title: "지출결의 조회",
-    description: "등록한 지출 결의 내역을 확인하세요",
-    icon: NotepadText,
-    href: "/expense/history",
-  },
-] as const;
+// ─── 아이콘 매핑 (DB menu_id 기준) ──────────────────────────────────────────
 
-const MENU_GROUP_LABELS = {
-  leave: "연차/휴가",
-  expense: "지출결의",
-} as const;
+const MENU_ID_ICON_MAP: Record<string, LucideIcon> = {
+  // 연차/휴가 자식
+  LEAVE_01: TicketsPlane,
+  LEAVE_02: CalendarCheck,
+  LEAVE_03: NotepadText,
+  LEAVE_04: CalendarSearch,
+  // 지출결의 자식
+  EXP_01: Wallet,
+  EXP_02: NotepadText,
+  // 일용직 자식
+  DAILY_01: HardHat,
+  DAILY_02: UserPlus,
+  // 일정관리 자식
+  SCH_01: CalendarPlus,
+  SCH_02: CalendarSearch,
+};
 
-const MENU_GROUP_ICONS = {
-  leave: CalendarDays,
-  expense: Wallet,
-} as const;
+function menuItemIcon(menuId: string): LucideIcon {
+  return MENU_ID_ICON_MAP[menuId] ?? NotepadText;
+}
+
+// 부모 그룹 아이콘: menu_id 기준
+const GROUP_ICON_MAP: Record<string, LucideIcon> = {
+  LEAVE: CalendarDays,
+  EXP:   Wallet,
+  DAILY: HardHat,
+  SCH:   CalendarDays,
+};
+
+// DB proc이 부모 항목을 반환하지 않을 때 사용하는 레이블 맵
+const PARENT_LABEL_MAP: Record<string, string> = {
+  LEAVE: "연차/휴가",
+  EXP:   "지출결의",
+  DAILY: "일용직 인사정보",
+  SCH:   "일정관리",
+};
+
+// 부서장(leader_flag)만 볼 수 있는 메뉴 ID
+const LEADER_ONLY_MENU_IDS = new Set(["LEAVE_02", "LEAVE_04"]);
+
+function groupIcon(menuId: string): LucideIcon {
+  return GROUP_ICON_MAP[menuId] ?? LayoutGrid;
+}
+
+
+// ─── 공통 ────────────────────────────────────────────────────────────────────
 
 const MENU_COLLAPSE_STORAGE_KEY = "menu-collapsed-groups";
 
-type MenuGroupKey = keyof typeof MENU_GROUP_LABELS;
+type Section = {
+  key: string;
+  label: string;
+  groupIcon: LucideIcon;
+  items: { key: string; title: string; icon: LucideIcon; href: string }[];
+};
 
 export default function MenuPage() {
   const router = useRouter();
-  const defaultCollapsedGroups = (Object.keys(MENU_GROUP_LABELS) as MenuGroupKey[]).reduce<
-    Partial<Record<MenuGroupKey, boolean>>
-  >((acc, key) => {
-    acc[key] = true;
-    return acc;
-  }, {});
-  const [collapsedGroups, setCollapsedGroups] = useState<
-    Partial<Record<MenuGroupKey, boolean>>
-  >(defaultCollapsedGroups);
-  const [isStorageHydrated, setIsStorageHydrated] = useState(false);
-  const leaderFlag = useAuthStore((s) => s.user?.leader_flag);
+  const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
+  const userId      = useAuthStore((s) => s.user?.user_id ?? "");
+  const leaderFlag  = useAuthStore((s) => s.user?.leader_flag);
   const companyName = useAuthStore((s) => s.user?.corp_name);
 
+  // null = 아직 로딩 중, [] = 로드 완료(권한 없음), [...] = 로드 완료(권한 있음)
+  const setMenuStoreItems = useMenuStore((s) => s.setItems);
+  const [dbItems, setDbItems] = useState<MenuDBItem[] | null>(null);
+  const [dbLoaded, setDbLoaded] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [isStorageHydrated, setIsStorageHydrated] = useState(false);
+
   useEffect(() => {
-    const rawValue = window.localStorage.getItem(MENU_COLLAPSE_STORAGE_KEY);
-    if (!rawValue) {
-      setIsStorageHydrated(true);
+    // userId 없으면 API를 부를 수 없으므로 바로 "로드 완료, 빈 목록"으로 처리
+    if (!companyCode || !userId) {
+      setDbItems([]);
+      setDbLoaded(true);
       return;
     }
+    const params = new URLSearchParams({ companyCode, userId });
+    fetch(`/api/menu-visibility?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data: { items: MenuDBItem[] | null }) => {
+        // 배열이면 그대로, null(네트워크 오류)이면 빈 배열로 처리
+        const arr = Array.isArray(data.items) ? data.items : [];
+        setDbItems(arr);
+        setMenuStoreItems(arr);
+        setDbLoaded(true);
+      })
+      .catch(() => {
+        setDbItems([]);
+        setDbLoaded(true);
+      });
+  }, [companyCode, userId]);
 
-    try {
-      const parsedValue = JSON.parse(rawValue) as Record<string, unknown>;
-      const nextValue = (Object.keys(MENU_GROUP_LABELS) as MenuGroupKey[]).reduce<
-        Partial<Record<MenuGroupKey, boolean>>
-      >((acc, key) => {
-        if (typeof parsedValue[key] === "boolean") {
-          acc[key] = parsedValue[key] as boolean;
-        }
-        return acc;
-      }, {});
-      setCollapsedGroups(nextValue);
-    } catch {
-      window.localStorage.removeItem(MENU_COLLAPSE_STORAGE_KEY);
-    } finally {
-      setIsStorageHydrated(true);
+  useEffect(() => {
+    const raw = window.localStorage.getItem(MENU_COLLAPSE_STORAGE_KEY);
+    if (raw) {
+      try {
+        setCollapsedGroups(JSON.parse(raw) as Record<string, boolean>);
+      } catch {
+        window.localStorage.removeItem(MENU_COLLAPSE_STORAGE_KEY);
+      }
     }
+    setIsStorageHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (!isStorageHydrated) {
-      return;
-    }
-
-    window.localStorage.setItem(
-      MENU_COLLAPSE_STORAGE_KEY,
-      JSON.stringify(collapsedGroups),
-    );
+    if (!isStorageHydrated) return;
+    window.localStorage.setItem(MENU_COLLAPSE_STORAGE_KEY, JSON.stringify(collapsedGroups));
   }, [collapsedGroups, isStorageHydrated]);
 
-  const visibleMenuSections = useMemo(() => {
+  const sections = useMemo((): Section[] => {
     const leader = isDepartmentLeader(leaderFlag);
-    const filteredItems = MENU_ITEMS.filter((item) => {
-      const leaderOk =
-        !("leaderOnly" in item && item.leaderOnly) || leader;
-      return leaderOk;
-    });
+    const canView = (menuId: string) => !LEADER_ONLY_MENU_IDS.has(menuId) || leader;
 
-    return (Object.keys(MENU_GROUP_LABELS) as MenuGroupKey[])
-      .map((group) => ({
-        group,
-        label: MENU_GROUP_LABELS[group],
-        items: filteredItems.filter((item) => item.group === group),
-      }))
-      .filter((section) => section.items.length > 0);
-  }, [leaderFlag]);
+    // dbItems는 항상 배열 (null = 초기 로딩 중에만 잠깐, useEffect에서 항상 배열로 세팅)
+    if (dbItems !== null) {
+      if (dbItems.length === 0) return [];
+      const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";
+      const hasParents = dbItems.some(isParent);
+
+      if (hasParents) {
+        const parents = dbItems
+          .filter(isParent)
+          .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
+
+        return parents
+          .map((parent) => {
+            const children = dbItems
+              .filter((m) => !isParent(m) && m.menu_pid === parent.menu_id && canView(m.menu_id))
+              .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
+            return {
+              key: parent.menu_id,
+              label: parent.menu_name,
+              groupIcon: groupIcon(parent.menu_id),
+              items: children.map((c) => ({
+                key: c.menu_id,
+                title: c.menu_name,
+                icon: menuItemIcon(c.menu_id),
+                href: `/${parent.menu_id}/${c.menu_id}`,
+              })),
+            };
+          })
+          .filter((s) => s.items.length > 0);
+      }
+
+      // proc이 자식 항목만 반환하는 경우 → menu_pid로 그룹화
+      const pidOrder: string[] = [];
+      const grouped = new Map<string, MenuDBItem[]>();
+      for (const item of dbItems) {
+        const pid = item.menu_pid && item.menu_pid !== "NULL" ? item.menu_pid : null;
+        if (!pid || !canView(item.menu_id)) continue;
+        if (!grouped.has(pid)) {
+          pidOrder.push(pid);
+          grouped.set(pid, []);
+        }
+        grouped.get(pid)!.push(item);
+      }
+
+      return pidOrder
+        .map((pid) => ({
+          key: pid,
+          label: PARENT_LABEL_MAP[pid] ?? pid,
+          groupIcon: groupIcon(pid),
+          items: (grouped.get(pid) ?? [])
+            .sort((a, b) => Number(a.menu_order) - Number(b.menu_order))
+            .map((c) => ({
+              key: c.menu_id,
+              title: c.menu_name,
+              icon: menuItemIcon(c.menu_id),
+              href: `/${pid}/${c.menu_id}`,
+            })),
+        }))
+        .filter((s) => s.items.length > 0);
+    }
+
+    // 아직 로딩 중 (dbItems === null): 빈 배열 반환 (로딩 완료 후 재렌더)
+    return [];
+  }, [dbItems, leaderFlag]);
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
@@ -169,58 +225,57 @@ export default function MenuPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
         <div className="px-4 py-4 flex flex-col gap-3">
-          {visibleMenuSections.map((section) => (
-            <section
-              key={section.group}
-              className="flex flex-col gap-3 first:mt-0 mt-3"
-            >
-              {(() => {
-                const GroupIcon = MENU_GROUP_ICONS[section.group];
-                return (
-              <button
-                type="button"
-                onClick={() =>
-                  setCollapsedGroups((prev) => ({
-                    ...prev,
-                    [section.group]: !prev[section.group],
-                  }))
-                }
-                className="px-1 py-1 flex items-center justify-between text-left"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                  <GroupIcon className="w-4 h-4 text-gray-900" />
-                  {section.label}
-                </span>
-                {collapsedGroups[section.group] ? (
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                ) : (
-                  <ChevronUp className="w-4 h-4 text-gray-400" />
-                )}
-              </button>
-                );
-              })()}
-              {!collapsedGroups[section.group] && section.items.map((item) => (
+          {dbLoaded && sections.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-2 py-16">
+              <LayoutGrid className="w-10 h-10 text-gray-200" />
+              <p className="text-sm text-gray-400">접근 가능한 메뉴가 없습니다</p>
+              <p className="text-xs text-gray-300">관리자에게 권한을 요청하세요</p>
+            </div>
+          )}
+          {sections.map((section) => {
+            const GroupIcon = section.groupIcon;
+            const collapsed = collapsedGroups[section.key] ?? true;
+            return (
+              <section key={section.key} className="flex flex-col gap-3 first:mt-0 mt-3">
                 <button
-                  key={item.id}
-                  onClick={() => router.push(item.href)}
-                  className="w-full bg-white rounded-xl border border-gray-100 px-4 py-4 flex items-center gap-4 text-left active:bg-gray-50 transition-colors shadow-sm"
+                  type="button"
+                  onClick={() => toggleGroup(section.key)}
+                  className="px-1 py-1 flex items-center justify-between text-left"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
-                    <item.icon className="w-6 h-6 text-gray-600" />
-                  </div>
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <span className="font-semibold text-gray-900 text-sm">
-                      {item.title}
-                    </span>
-                    <span className="text-xs text-gray-400 mt-0.5 truncate">
-                      {item.description}
-                    </span>
-                  </div>
-                  <span className="text-gray-300 text-lg">›</span>
+                  <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <GroupIcon className="w-4 h-4 text-gray-900" />
+                    {section.label}
+                  </span>
+                  {collapsed ? (
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                  )}
                 </button>
-              ))}
-            </section>
-          ))}
+
+                {!collapsed && section.items.map((item) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => router.push(item.href)}
+                      className="w-full bg-white rounded-xl border border-gray-100 px-4 py-4 flex items-center gap-4 text-left active:bg-gray-50 transition-colors shadow-sm"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+                        <ItemIcon className="w-6 h-6 text-gray-600" />
+                      </div>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="font-semibold text-gray-900 text-sm">
+                          {item.title}
+                        </span>
+                      </div>
+                      <span className="text-gray-300 text-lg">›</span>
+                    </button>
+                  );
+                })}
+              </section>
+            );
+          })}
         </div>
       </div>
     </div>
