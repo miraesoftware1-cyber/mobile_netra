@@ -13,10 +13,11 @@ jobs:
         shell: cmd
         run: |
           git config --global --add safe.directory D:/mobile_netra
+          git config --global credential.helper ""
           if not exist D:\mobile_netra\.git (
-            git clone http://pmk:5bf62dc71c1710868e7932cd78d790fac7b6140c@211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
+            git -c credential.helper= clone http://pmk:5bf62dc71c1710868e7932cd78d790fac7b6140c@211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
           ) else (
-            git -C D:\mobile_netra fetch http://pmk:5bf62dc71c1710868e7932cd78d790fac7b6140c@211.56.248.9:3000/miraesoftware/mobile_netra-test-.git && git -C D:\mobile_netra reset --hard origin/main
+            git -C D:\mobile_netra -c credential.helper= fetch http://pmk:5bf62dc71c1710868e7932cd78d790fac7b6140c@211.56.248.9:3000/miraesoftware/mobile_netra-test-.git && git -C D:\mobile_netra reset --hard origin/main
           )
 
       - name: Stop PM2
