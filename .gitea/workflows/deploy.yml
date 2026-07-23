@@ -12,6 +12,7 @@ jobs:
       - name: Pull latest code
         shell: cmd
         run: |
+          git config --global --add safe.directory D:/mobile_netra
           if not exist D:\mobile_netra\.git (
             git clone http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
           ) else (
