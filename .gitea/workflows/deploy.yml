@@ -20,6 +20,10 @@ jobs:
           }
           Copy-Item -Recurse -Force "${{ github.workspace }}\*" "D:\mobile_netra\"
 
+      - name: Stop PM2
+        shell: cmd
+        run: pm2 stop mobile-netra 2>nul & exit 0
+
       - name: Install dependencies
         working-directory: D:\mobile_netra
         shell: powershell
