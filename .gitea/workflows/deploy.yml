@@ -38,6 +38,5 @@ jobs:
       - name: PM2 restart
         shell: cmd
         run: |
-          pm2 delete mobile-netra 2>nul & echo deleted
-          pm2 start D:\mobile_netra\ecosystem.config.js 2>&1
+          pm2 restart mobile-netra --update-env 2>&1 || pm2 start D:\mobile_netra\ecosystem.config.js 2>&1
           pm2 save
