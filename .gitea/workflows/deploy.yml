@@ -34,5 +34,5 @@ jobs:
         working-directory: D:\mobile_netra
         shell: cmd
         run: |
-          pm2 restart mobile-netra || pm2 start npm --name "mobile-netra" -- run start -- --port 3001
+          pm2 restart mobile-netra || pm2 start ecosystem.config.js
           pm2 save
