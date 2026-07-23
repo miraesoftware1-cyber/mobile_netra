@@ -14,9 +14,9 @@ jobs:
         run: |
           git config --global --add safe.directory D:/mobile_netra
           if not exist D:\mobile_netra\.git (
-            git clone http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
+            git clone http://pmk:12345678@211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
           ) else (
-            git -C D:\mobile_netra fetch origin && git -C D:\mobile_netra reset --hard origin/main
+            git -C D:\mobile_netra fetch http://pmk:12345678@211.56.248.9:3000/miraesoftware/mobile_netra-test-.git && git -C D:\mobile_netra reset --hard origin/main
           )
 
       - name: Stop PM2
