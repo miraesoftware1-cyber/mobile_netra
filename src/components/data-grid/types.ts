@@ -45,6 +45,8 @@ export type GridColumn<T> = {
   // DB 컬럼 길이에 맞춰 입력 자체를 막는다 (varchar(1) 같은 짧은 컬럼에 긴 값을 넣어
   // "String or binary data would be truncated" 저장 실패가 나는 것을 미리 방지).
   maxLength?: number;
+  // 글자 수(바이트 아닌 문자 단위) 제한 — 초과 시 입력을 막고 onCellValidationError 콜백 호출.
+  maxChars?: number;
   // 편집 입력칸의 placeholder (예: 날짜 형식 힌트 'YYYY-MM-DD').
   placeholder?: string;
   // 입력값을 즉시 가공한다 — onChange마다 호출되며 반환값이 editValue와 저장값 모두에 반영된다.

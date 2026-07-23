@@ -87,9 +87,11 @@ export default function MenuPage() {
   const leaderFlag  = useAuthStore((s) => s.user?.leader_flag);
   const companyName = useAuthStore((s) => s.user?.corp_name);
 
-  // null = 아직 로딩 중, [] = 로드 완료(권한 없음), [...] = 로드 완료(권한 있음)
+  // 스토어에서 직접 읽어 layout의 visibilitychange 업데이트에 반응
+  const storeItems = useMenuStore((s) => s.items);
+  const storePerms = useMenuStore((s) => s.perms);
   const setMenuStoreItems = useMenuStore((s) => s.setItems);
-  const [dbItems, setDbItems] = useState<MenuDBItem[] | null>(null);
+  const setMenuStorePerms = useMenuStore((s) => s.setPerms);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
@@ -97,22 +99,19 @@ export default function MenuPage() {
   useEffect(() => {
     // userId 없으면 API를 부를 수 없으므로 바로 "로드 완료, 빈 목록"으로 처리
     if (!companyCode || !userId) {
-      setDbItems([]);
       setDbLoaded(true);
       return;
     }
     const params = new URLSearchParams({ companyCode, userId });
     fetch(`/api/menu-visibility?${params.toString()}`)
       .then((r) => r.json())
-      .then((data: { items: MenuDBItem[] | null }) => {
-        // 배열이면 그대로, null(네트워크 오류)이면 빈 배열로 처리
+      .then((data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean }> }) => {
         const arr = Array.isArray(data.items) ? data.items : [];
-        setDbItems(arr);
         setMenuStoreItems(arr);
+        if (data.perms) setMenuStorePerms(data.perms);
         setDbLoaded(true);
       })
       .catch(() => {
-        setDbItems([]);
         setDbLoaded(true);
       });
   }, [companyCode, userId]);
@@ -135,73 +134,85 @@ export default function MenuPage() {
   }, [collapsedGroups, isStorageHydrated]);
 
   const sections = useMemo((): Section[] => {
+    if (!dbLoaded) return [];
+
     const leader = isDepartmentLeader(leaderFlag);
-    const canView = (menuId: string) => !LEADER_ONLY_MENU_IDS.has(menuId) || leader;
 
-    // dbItems는 항상 배열 (null = 초기 로딩 중에만 잠깐, useEffect에서 항상 배열로 세팅)
-    if (dbItems !== null) {
-      if (dbItems.length === 0) return [];
-      const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";
-      const hasParents = dbItems.some(isParent);
+    // 소메뉴: 리더 전용 + 명시적 view=false 체크
+    const canView = (menuId: string) => {
+      if (LEADER_ONLY_MENU_IDS.has(menuId) && !leader) return false;
+      const perm = storePerms[menuId];
+      return !perm || perm.view;
+    };
+    // 대메뉴: 권한 행이 있고 view=false 이면 숨김
+    const parentViewable = (menuId: string) => {
+      const perm = storePerms[menuId];
+      return !perm || perm.view;
+    };
 
-      if (hasParents) {
-        const parents = dbItems
-          .filter(isParent)
-          .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
+    const dbItems = storeItems;
+    if (dbItems.length === 0) return [];
 
-        return parents
-          .map((parent) => {
-            const children = dbItems
-              .filter((m) => !isParent(m) && m.menu_pid === parent.menu_id && canView(m.menu_id))
-              .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
-            return {
-              key: parent.menu_id,
-              label: parent.menu_name,
-              groupIcon: groupIcon(parent.menu_id),
-              items: children.map((c) => ({
-                key: c.menu_id,
-                title: c.menu_name,
-                icon: menuItemIcon(c.menu_id),
-                href: `/${parent.menu_id}/${c.menu_id}`,
-              })),
-            };
-          })
-          .filter((s) => s.items.length > 0);
-      }
+    const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";
+    const hasParents = dbItems.some(isParent);
 
-      // proc이 자식 항목만 반환하는 경우 → menu_pid로 그룹화
-      const pidOrder: string[] = [];
-      const grouped = new Map<string, MenuDBItem[]>();
-      for (const item of dbItems) {
-        const pid = item.menu_pid && item.menu_pid !== "NULL" ? item.menu_pid : null;
-        if (!pid || !canView(item.menu_id)) continue;
-        if (!grouped.has(pid)) {
-          pidOrder.push(pid);
-          grouped.set(pid, []);
-        }
-        grouped.get(pid)!.push(item);
-      }
+    if (hasParents) {
+      const parents = dbItems
+        .filter(isParent)
+        .filter((p) => parentViewable(p.menu_id))
+        .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
 
-      return pidOrder
-        .map((pid) => ({
-          key: pid,
-          label: PARENT_LABEL_MAP[pid] ?? pid,
-          groupIcon: groupIcon(pid),
-          items: (grouped.get(pid) ?? [])
-            .sort((a, b) => Number(a.menu_order) - Number(b.menu_order))
-            .map((c) => ({
+      return parents
+        .map((parent) => {
+          const children = dbItems
+            .filter((m) => !isParent(m) && m.menu_pid === parent.menu_id && canView(m.menu_id))
+            .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
+          return {
+            key: parent.menu_id,
+            label: parent.menu_name,
+            groupIcon: groupIcon(parent.menu_id),
+            items: children.map((c) => ({
               key: c.menu_id,
               title: c.menu_name,
               icon: menuItemIcon(c.menu_id),
-              href: `/${pid}/${c.menu_id}`,
+              href: `/${parent.menu_id}/${c.menu_id}`,
             })),
-        }))
+          };
+        })
         .filter((s) => s.items.length > 0);
     }
 
-    // 아직 로딩 중 (dbItems === null): 빈 배열 반환 (로딩 완료 후 재렌더)
-    return [];
-  }, [dbItems, leaderFlag]);
+    // proc이 자식 항목만 반환하는 경우 → menu_pid로 그룹화
+    const pidOrder: string[] = [];
+    const grouped = new Map<string, MenuDBItem[]>();
+    for (const item of dbItems) {
+      const pid = item.menu_pid && item.menu_pid !== "NULL" ? item.menu_pid : null;
+      if (!pid || !canView(item.menu_id)) continue;
+      // 대메뉴 권한 체크 (storePerms에 pid 행이 있으면)
+      if (!parentViewable(pid)) continue;
+      if (!grouped.has(pid)) {
+        pidOrder.push(pid);
+        grouped.set(pid, []);
+      }
+      grouped.get(pid)!.push(item);
+    }
+
+    return pidOrder
+      .map((pid) => ({
+        key: pid,
+        label: PARENT_LABEL_MAP[pid] ?? pid,
+        groupIcon: groupIcon(pid),
+        items: (grouped.get(pid) ?? [])
+          .sort((a, b) => Number(a.menu_order) - Number(b.menu_order))
+          .map((c) => ({
+            key: c.menu_id,
+            title: c.menu_name,
+            icon: menuItemIcon(c.menu_id),
+            href: `/${pid}/${c.menu_id}`,
+          })),
+      }))
+      .filter((s) => s.items.length > 0);
+  }, [storeItems, storePerms, dbLoaded, leaderFlag]);
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));

@@ -31,19 +31,37 @@ function apiYmdToIsoDate(dateStr: string) {
   return `${n.slice(0, 4)}-${n.slice(4, 6)}-${n.slice(6, 8)}`;
 }
 
+function isValidYmdStr(dateStr: string | null | undefined): boolean {
+  if (!dateStr) return false;
+  const n = dateStr.replace(/-/g, "");
+  if (n.length < 8) return false;
+  const y = Number(n.slice(0, 4));
+  const m = Number(n.slice(4, 6));
+  const d = Number(n.slice(6, 8));
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
+  const dt = new Date(y, m - 1, d);
+  return !isNaN(dt.getTime()) && dt.getFullYear() === y && dt.getMonth() + 1 === m && dt.getDate() === d;
+}
+
 function apiYmdToDate(dateStr: string) {
   const n = dateStr.replace(/-/g, "");
-  return new Date(
-    Number(n.slice(0, 4)),
-    Number(n.slice(4, 6)) - 1,
-    Number(n.slice(6, 8)),
-  );
+  const y = Number(n.slice(0, 4));
+  const m = Number(n.slice(4, 6));
+  const d = Number(n.slice(6, 8));
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date(NaN);
+  return new Date(y, m - 1, d);
 }
 
 function expandLeaveItemToDayKeys(item: HolidayListItem): string[] {
+  if (!isValidYmdStr(item.year_bdate) || !isValidYmdStr(item.year_edate)) return [];
   const start = apiYmdToDate(item.year_bdate);
   const end = apiYmdToDate(item.year_edate);
-  return eachDayOfInterval({ start, end }).map((d) => format(d, "yyyy-MM-dd"));
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return [];
+  try {
+    return eachDayOfInterval({ start, end }).map((d) => format(d, "yyyy-MM-dd"));
+  } catch {
+    return [];
+  }
 }
 
 function isLeaveConfirmed(item: HolidayListItem) {
@@ -178,10 +196,16 @@ export default function CalendarPage() {
   const myScheduleDayMap = useMemo(() => {
     const m = new Set<string>();
     for (const item of mySchedules) {
+      if (!isValidYmdStr(item.beg_date) || !isValidYmdStr(item.end_date)) continue;
       const start = apiYmdToDate(item.beg_date);
       const end = apiYmdToDate(item.end_date);
-      for (const d of eachDayOfInterval({ start, end })) {
-        m.add(format(d, "yyyy-MM-dd"));
+      if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) continue;
+      try {
+        for (const d of eachDayOfInterval({ start, end })) {
+          m.add(format(d, "yyyy-MM-dd"));
+        }
+      } catch {
+        // 날짜 범위 오류 무시
       }
     }
     return m;
@@ -193,6 +217,7 @@ export default function CalendarPage() {
     kind: "holiday" | "leave" | "schedule";
     title: string;
     time?: string;
+    remark?: string;
   };
 
   const monthEvents = useMemo((): MonthEvent[] => {
@@ -214,14 +239,17 @@ export default function CalendarPage() {
         title: item.holiday_typ,
       }));
 
-    const scheduleEv: MonthEvent[] = mySchedules.map((item) => ({
-      dateStr: apiYmdToIsoDate(item.beg_date),
-      endDateStr:
-        item.end_date !== item.beg_date ? apiYmdToIsoDate(item.end_date) : undefined,
-      kind: "schedule" as const,
-      title: item.scd_name,
-      time: item.scd_time || undefined,
-    }));
+    const scheduleEv: MonthEvent[] = mySchedules
+      .filter((item) => isValidYmdStr(item.beg_date) && isValidYmdStr(item.end_date))
+      .map((item) => ({
+        dateStr: apiYmdToIsoDate(item.beg_date),
+        endDateStr:
+          item.end_date !== item.beg_date ? apiYmdToIsoDate(item.end_date) : undefined,
+        kind: "schedule" as const,
+        title: item.scd_name,
+        time: item.scd_time || undefined,
+        remark: item.scd_remark || undefined,
+      }));
 
     return [...holidayEv, ...leaveEv, ...scheduleEv].sort((a, b) =>
       a.dateStr.localeCompare(b.dateStr),
@@ -372,9 +400,13 @@ export default function CalendarPage() {
               const bdr   = isHoliday ? "#fecdd3" : isLeave ? "#c7d2fe" : "#c8e6ca";
               const dot   = isHoliday ? "#f87171" : isLeave ? "#6366f1" : "#7abf82";
               const color = isHoliday ? "#ef4444" : isLeave ? "#6366f1" : "#4a9e5c";
-              const dateLabel = format(new Date(`${ev.dateStr}T12:00:00`), "M월 d일 (eee)", { locale: ko });
-              const endLabel = ev.endDateStr
-                ? ` ~ ${format(new Date(`${ev.endDateStr}T12:00:00`), "M월 d일 (eee)", { locale: ko })}`
+              if (!ev.dateStr || ev.dateStr.length < 10) return null;
+              const startDt = new Date(`${ev.dateStr}T12:00:00`);
+              if (isNaN(startDt.getTime())) return null;
+              const dateLabel = format(startDt, "M월 d일 (eee)", { locale: ko });
+              const endDt = ev.endDateStr ? new Date(`${ev.endDateStr}T12:00:00`) : null;
+              const endLabel = endDt && !isNaN(endDt.getTime())
+                ? ` ~ ${format(endDt, "M월 d일 (eee)", { locale: ko })}`
                 : "";
 
               return (
@@ -394,7 +426,10 @@ export default function CalendarPage() {
                         <span className="text-xs text-gray-800 shrink-0">{ev.time}</span>
                       ) : null}
                     </div>
-                    <p className="text-sm text-gray-900">{ev.title}</p>
+                    <p className="text-sm text-gray-900 break-words">{ev.title}</p>
+                    {ev.remark ? (
+                      <p className="mt-0.5 text-xs text-gray-500 break-words">{ev.remark}</p>
+                    ) : null}
                   </div>
                 </div>
               );

@@ -1,14 +1,18 @@
 import { create } from 'zustand';
-import type { MenuDBItem } from '@/app/api/menu-visibility/route';
+import type { MenuDBItem, MenuPerm } from '@/app/api/menu-visibility/route';
 
 interface MenuStore {
   items: MenuDBItem[];
+  perms: Record<string, MenuPerm>;
   setItems: (items: MenuDBItem[]) => void;
+  setPerms: (perms: Record<string, MenuPerm>) => void;
 }
 
 export const useMenuStore = create<MenuStore>((set) => ({
   items: [],
+  perms: {},
   setItems: (items) => set({ items }),
+  setPerms: (perms) => set({ perms }),
 }));
 
 export function useMenuTitle(menuId: string, fallback: string): string {

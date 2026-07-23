@@ -25,7 +25,7 @@ export default function LoginPage() {
               <span className="text-3xl font-bold text-white">N</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-              연차신청
+              Netra
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               회사 코드와 전화번호로 로그인하세요

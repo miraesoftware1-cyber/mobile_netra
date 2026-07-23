@@ -308,7 +308,7 @@ export default function ScheduleListPage() {
                           <span className="text-xs text-gray-800 shrink-0">{item.time}</span>
                         ) : null}
                       </div>
-                      <p className="text-sm text-gray-900">{item.title}</p>
+                      <p className="text-sm text-gray-900 break-words">{item.title}</p>
                       {item.kind === "schedule" && item.remark ? (
                         <p className="mt-0.5 text-xs text-gray-500 break-words">{item.remark}</p>
                       ) : null}

@@ -20,7 +20,8 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     logout();
-    router.replace("/login");
+    // 전체 리로드로 JS 상태 완전 초기화 (청크 캐시 문제도 해결)
+    window.location.href = "/login";
   };
 
   return (

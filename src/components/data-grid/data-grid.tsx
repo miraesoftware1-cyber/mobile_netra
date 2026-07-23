@@ -60,6 +60,11 @@ type DataGridProps<T extends Record<string, unknown>> = {
   // cellType='help'인 칸에서 "?" 버튼을 누르면 호출된다 — 화면 쪽에서 알맞은 HELP 피커를 열고,
   // 선택되면 onCellChange로 값을 넣어주면 된다.
   onOpenHelpPicker?: (row: GridRow<T>, col: GridColumn<T>) => void;
+  // maxChars 초과 시 호출된다 — 화면 쪽에서 메시지/토스트를 표시하는 데 쓴다.
+  onCellValidationError?: (field: string, message: string) => void;
+  // cellType='date'인 칸을 클릭할 때 호출된다 — 제공하면 네이티브 date input 대신 화면 쪽
+  // 커스텀 날짜 피커(바텀시트 등)를 열고, 선택 후 onCellChange로 값을 넣어주면 된다.
+  onDateCellEdit?: (rowKey: string, field: string, currentValue: string) => void;
   // 포커스된 행 배경색. 한 화면에 그리드 두 개를 나란히 쓸 때(마스터-디테일) 서로 다른 색을 줘서
   // 지금 어느 그리드가 선택돼 있는지 한눈에 구분되게 한다. 기본은 진한 파란색.
   focusRowColorClass?: string;
@@ -233,6 +238,8 @@ function DataGridInner<T extends Record<string, unknown>>(
     onRequestInsertRow,
     onRequestDeleteRow,
     onOpenHelpPicker,
+    onCellValidationError,
+    onDateCellEdit,
     focusRowColorClass = 'bg-blue-100',
     focusBorderColorClass = 'ring-blue-200',
     getRowAccentClass,
@@ -1026,6 +1033,10 @@ function DataGridInner<T extends Record<string, unknown>>(
           onChange={(e) => {
             const raw = e.target.value;
             if (col.maxLength && byteLength(raw) > col.maxLength) return; // 바이트 기준 초과 시 입력 무시
+            if (col.maxChars && [...raw].length > col.maxChars) {
+              onCellValidationError?.(col.dataField, `'${col.caption}'은(는) ${col.maxChars}글자 이내로 작성해주세요.`);
+              return;
+            }
             const next = col.transform ? col.transform(raw) : raw;
             setEditValue(next);
             // 값이 바뀌는 즉시 반영 — Tab/Enter로 넘어가기 전에도 저장 버튼이 바로 활성화되게 한다.
@@ -1308,14 +1319,31 @@ function DataGridInner<T extends Record<string, unknown>>(
                           onFocusedRowChanged?.(row.__key);
                           if (!editable) return;
                           e.stopPropagation();
-                          // 단일 클릭으로는 어떤 칸도 편집이 열리지 않는다 — 한 번에 한 칸만 편집하도록,
-                          // 편집은 더블클릭/수정 버튼으로 열고 그 다음엔 Tab/Enter로만 옆 칸으로 이동한다.
-                          // 체크형도 이제 다른 칸과 동일하게 클릭만으로는 안 바뀌고, 더블클릭/Tab-Enter로
-                          // 진입한 편집 모드 안에서 방향키로만 값이 바뀐다(값이 바로 뒤집히던 예전 동작 제거).
+                          // date 칸 + onDateCellEdit 콜백이 있으면 네이티브 input 대신 외부 피커를 연다.
+                          // 같은 행의 다른 칸을 편집 중이었다면 그 값을 먼저 커밋한다.
+                          if (col.cellType === 'date' && onDateCellEdit) {
+                            if (editing && editing.key === row.__key && editing.field !== col.dataField) {
+                              const prevCol = columns.find((pc) => pc.dataField === editing.field);
+                              if (prevCol?.cellType !== 'check') {
+                                const prevRow = rows.find((pr) => pr.__key === editing.key);
+                                if (prevRow) onCellChange(prevRow.__key, editing.field as keyof T, editValue);
+                              }
+                              setEditing(null);
+                              setEditingRowKey(null);
+                            }
+                            onDateCellEdit(row.__key, col.dataField, String(row[col.dataField] ?? ''));
+                          }
+                          // 단일 클릭으로는 date 외 칸은 편집이 열리지 않는다 — 더블클릭/수정 버튼으로 열고
+                          // 그 다음엔 Tab/Enter로만 옆 칸으로 이동한다.
                         }}
                         onDoubleClick={(e) => {
                           if (!editable) return;
                           e.stopPropagation();
+                          // date 칸은 onDateCellEdit이 있으면 더블클릭도 외부 피커로 위임한다.
+                          if (col.cellType === 'date' && onDateCellEdit) {
+                            onDateCellEdit(row.__key, col.dataField, String(row[col.dataField] ?? ''));
+                            return;
+                          }
                           // 다른 행을 편집하던 중이었다면 startEdit 내부에서 그 행을 스냅샷으로 되돌리고 시작한다.
                           startEdit(row, col);
                         }}

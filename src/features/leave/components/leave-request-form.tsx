@@ -8,7 +8,8 @@ import { format, eachDayOfInterval, parseISO, getYear, getDay } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Send } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useHolidayTypes } from "@/features/leave/hooks/use-holiday-types";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,6 @@ import {
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import {
   fetchHolidayInfo,
-  fetchHolidayTypes,
   fetchCompanyHolidays,
   submitLeaveRequest,
   type HolidayInfo,
@@ -210,8 +210,6 @@ function DatePickerField({
 export function LeaveRequestForm() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const queryClient = useQueryClient();
-
   const { data: holidayInfo, isLoading: isHolidayLoading } =
     useQuery<HolidayInfo | null>({
       queryKey: [
@@ -234,19 +232,8 @@ export function LeaveRequestForm() {
       enabled: !!user?.companyCode && !!user?.emp_code,
     });
 
-  const { data: holidayTypes = [], isLoading: isHolidayTypesLoading } =
-    useQuery<HolidayTypeItem[]>({
-      queryKey: ["holidayTypes", user?.companyCode],
-      queryFn: async () => {
-        if (!user?.companyCode) return [];
-        const result = await fetchHolidayTypes(user.companyCode);
-        if (result.success) return result.data;
-        const failResult = result as { success: false; error: string };
-        throw new Error(failResult.error);
-      },
-      enabled: !!user?.companyCode,
-      staleTime: 1000 * 60 * 30,
-    });
+  const { items: holidayTypes, isLoading: isHolidayTypesLoading } =
+    useHolidayTypes(user?.companyCode);
 
   const { data: companyHolidays = [] } = useQuery<CompanyHolidayItem[]>({
     queryKey: [
@@ -290,12 +277,7 @@ export function LeaveRequestForm() {
     mode: "onSubmit",
     reValidateMode: "onChange",
     defaultValues: {
-      leaveTypeCode: getInitDefaultLeaveTypeCode(
-        queryClient.getQueryData<HolidayTypeItem[]>([
-          "holidayTypes",
-          user?.companyCode,
-        ]),
-      ),
+      leaveTypeCode: "",
       startDate: "",
       endDate: "",
       reason: "",
