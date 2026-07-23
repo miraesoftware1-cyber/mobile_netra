@@ -8,25 +8,31 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
-    defaults:
-      run:
-        shell: powershell
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Copy to deploy path
+        shell: powershell
+        run: |
+          if (!(Test-Path "D:\mobile_netra")) {
+            New-Item -ItemType Directory -Force "D:\mobile_netra"
+          }
+          Copy-Item -Recurse -Force "${{ github.workspace }}\*" "D:\mobile_netra\"
+
       - name: Install dependencies
+        working-directory: D:\mobile_netra
+        shell: powershell
         run: npm ci
 
       - name: Build
+        working-directory: D:\mobile_netra
+        shell: powershell
         run: npm run build
 
       - name: PM2 restart
+        working-directory: D:\mobile_netra
+        shell: cmd
         run: |
-          $status = pm2 describe mobile-netra 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            pm2 restart mobile-netra
-          } else {
-            pm2 start npm --name "mobile-netra" -- run start -- --port 3001
-          }
+          pm2 restart mobile-netra || pm2 start npm --name "mobile-netra" -- run start -- --port 3001
           pm2 save
