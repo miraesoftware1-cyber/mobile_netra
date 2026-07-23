@@ -9,16 +9,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Copy to deploy path
-        shell: powershell
+      - name: Pull latest code
+        shell: cmd
         run: |
-          if (!(Test-Path "D:\mobile_netra")) {
-            New-Item -ItemType Directory -Force "D:\mobile_netra"
-          }
-          Copy-Item -Recurse -Force "${{ github.workspace }}\*" "D:\mobile_netra\"
+          if not exist D:\mobile_netra\.git (
+            git clone http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
+          ) else (
+            git -C D:\mobile_netra fetch origin && git -C D:\mobile_netra reset --hard origin/main
+          )
 
       - name: Stop PM2
         shell: cmd
@@ -26,12 +24,12 @@ jobs:
 
       - name: Install dependencies
         working-directory: D:\mobile_netra
-        shell: powershell
+        shell: cmd
         run: npm ci
 
       - name: Build
         working-directory: D:\mobile_netra
-        shell: powershell
+        shell: cmd
         run: npm run build
 
       - name: PM2 restart
