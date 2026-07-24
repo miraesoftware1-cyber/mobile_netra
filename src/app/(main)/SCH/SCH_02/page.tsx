@@ -308,8 +308,8 @@ export default function ScheduleListPage() {
             onClick={() => setMyOnly((v) => !v)}
             className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
             style={myOnly
-              ? { backgroundColor: "#1d4ed8", color: "#fff" }
-              : FILTER_INACTIVE}
+              ? { backgroundColor: "#1d4ed8", color: "#fff", fontWeight: 700 }
+              : { backgroundColor: "#f3f4f6", color: "#6b7280" }}
           >
             <User className="w-3 h-3" />
             내 일정
