@@ -64,20 +64,21 @@ function expandLeaveItemToDayKeys(item: HolidayListItem): string[] {
   }
 }
 
-function isLeaveConfirmed(item: HolidayListItem) {
-  return String(item.year_chk ?? "").toUpperCase() === "Y";
-}
 
 function isHiddenPublicHolidayLabel(holidayName: string) {
   return holidayName.trim() === "정기";
 }
 
 const FILTER_ACTIVE: Record<"all" | "휴가" | "일정", React.CSSProperties> = {
-  all:  { backgroundColor: "#374151", color: "#fff" },
-  휴가: { backgroundColor: "#6366f1", color: "#fff" },
-  일정: { backgroundColor: "#4a9e5c", color: "#fff" },
+  all:  { backgroundColor: "#374151", color: "#fff", fontWeight: 700 },
+  휴가: { backgroundColor: "#6366f1", color: "#fff", fontWeight: 700 },
+  일정: { backgroundColor: "#4a9e5c", color: "#fff", fontWeight: 700 },
 };
-const FILTER_INACTIVE: React.CSSProperties = { backgroundColor: "#f3f4f6", color: "#6b7280" };
+const FILTER_INACTIVE: Record<"all" | "휴가" | "일정", React.CSSProperties> = {
+  all:  { backgroundColor: "#f3f4f6", color: "#6b7280" },
+  휴가: { backgroundColor: "#eef2ff", color: "#6366f1" },
+  일정: { backgroundColor: "#edf7ee", color: "#4a9e5c" },
+};
 
 export default function CalendarPage() {
   const user = useAuthStore((s) => s.user);
@@ -112,7 +113,7 @@ export default function CalendarPage() {
       if (!user?.companyCode || !user.corp_code || !user.emp_code) return [];
       const result = await fetchHolidayList(user.companyCode, user.corp_code, calendarYear, user.emp_code);
       if (result.success === false) return [];
-      return result.items.filter(isLeaveConfirmed);
+      return result.items;
     },
     enabled: !!user?.companyCode && !!user?.corp_code && !!user?.emp_code,
   });
@@ -337,7 +338,7 @@ export default function CalendarPage() {
                   key={f}
                   onClick={() => setFilter(f)}
                   className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
-                  style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE}
+                  style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE[f]}
                 >
                   {f === "all" ? "전체" : f}
                 </button>

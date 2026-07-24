@@ -54,11 +54,15 @@ type DisplayItem =
   | { kind: "leave";    emp_code: string; beg_date: string; end_date: string; emp_name?: string; title: string; key: string };
 
 const FILTER_ACTIVE: Record<"all" | "휴가" | "일정", React.CSSProperties> = {
-  all:  { backgroundColor: "#374151", color: "#fff" },
-  휴가: { backgroundColor: "#6366f1", color: "#fff" },
-  일정: { backgroundColor: "#4a9e5c", color: "#fff" },
+  all:  { backgroundColor: "#374151", color: "#fff", fontWeight: 700 },
+  휴가: { backgroundColor: "#6366f1", color: "#fff", fontWeight: 700 },
+  일정: { backgroundColor: "#4a9e5c", color: "#fff", fontWeight: 700 },
 };
-const FILTER_INACTIVE: React.CSSProperties = { backgroundColor: "#f3f4f6", color: "#6b7280" };
+const FILTER_INACTIVE: Record<"all" | "휴가" | "일정", React.CSSProperties> = {
+  all:  { backgroundColor: "#f3f4f6", color: "#6b7280" },
+  휴가: { backgroundColor: "#eef2ff", color: "#6366f1" },
+  일정: { backgroundColor: "#edf7ee", color: "#4a9e5c" },
+};
 
 export default function ScheduleListPage() {
   const router = useRouter();
@@ -315,7 +319,7 @@ export default function ScheduleListPage() {
               key={f}
               onClick={() => setFilter(f)}
               className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
-              style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE}
+              style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE[f]}
             >
               {f === "all" ? "전체" : f}
             </button>
