@@ -17,7 +17,7 @@ jobs:
           git -C D:\mobile_netra init
           git -C D:\mobile_netra remote remove origin 2>nul & echo .
           git -C D:\mobile_netra remote add origin http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git
-          git -C D:\mobile_netra -c http.extraHeader="Authorization: token 99087cf491f0b27f896fc391c6eede9590369849" fetch origin
+          git -C D:\mobile_netra -c http.extraHeader="Authorization: token ${{ secrets.DEPLOY_TOKEN }}" fetch origin
           git -C D:\mobile_netra reset --hard origin/main
 
       - name: Stop app
