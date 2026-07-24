@@ -12,14 +12,13 @@ jobs:
       - name: Pull latest code
         shell: cmd
         run: |
+          if not exist D:\mobile_netra mkdir D:\mobile_netra
           git config --global --add safe.directory D:/mobile_netra
-          if not exist D:\mobile_netra\.git (
-            git -c http.extraHeader="Authorization: token 99087cf491f0b27f896fc391c6eede9590369849" clone http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git D:\mobile_netra
-          ) else (
-            git -C D:\mobile_netra remote set-url origin http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git
-            git -C D:\mobile_netra -c http.extraHeader="Authorization: token 99087cf491f0b27f896fc391c6eede9590369849" fetch origin
-            git -C D:\mobile_netra reset --hard origin/main
-          )
+          git -C D:\mobile_netra init
+          git -C D:\mobile_netra remote remove origin 2>nul & echo .
+          git -C D:\mobile_netra remote add origin http://211.56.248.9:3000/miraesoftware/mobile_netra-test-.git
+          git -C D:\mobile_netra -c http.extraHeader="Authorization: token 99087cf491f0b27f896fc391c6eede9590369849" fetch origin
+          git -C D:\mobile_netra reset --hard origin/main
 
       - name: Stop PM2
         shell: cmd
@@ -33,7 +32,9 @@ jobs:
       - name: Build
         working-directory: D:\mobile_netra
         shell: cmd
-        run: npm run build
+        run: |
+          rmdir /s /q .next 2>nul & echo cache cleared
+          npm run build
 
       - name: PM2 restart
         shell: cmd
