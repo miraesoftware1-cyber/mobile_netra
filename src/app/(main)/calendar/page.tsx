@@ -244,7 +244,7 @@ export default function CalendarPage() {
       <header className="shrink-0 z-10 border-b border-gray-100 bg-white px-5 py-4">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-bold text-gray-900">캘린더</h1>
+          <h1 className="text-lg font-bold text-gray-900">캘린더 <span className="text-sm font-normal text-gray-400">(내 일정)</span></h1>
         </div>
       </header>
 
