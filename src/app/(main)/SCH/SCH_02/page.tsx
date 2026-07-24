@@ -186,8 +186,10 @@ export default function ScheduleListPage() {
         </div>
       </header>
 
+      {/* 스크롤 영역: 캘린더 + 목록 함께 스크롤 */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
       {/* 캘린더 */}
-      <div className="shrink-0 mx-4 mt-4 mb-2">
+      <div className="mx-4 mt-4 mb-2">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
             <button onClick={() => setCurrentMonth((p) => subMonths(p, 1))}
@@ -253,7 +255,7 @@ export default function ScheduleListPage() {
       </div>
 
       {/* 목록 헤더 */}
-      <div className="shrink-0 mx-4 mt-2 flex items-center gap-2">
+      <div className="mx-4 mt-2 flex items-center gap-2">
         <span className="text-sm font-semibold text-gray-700">
           {format(currentMonth, "M월 일정", { locale: ko })}
         </span>
@@ -275,7 +277,7 @@ export default function ScheduleListPage() {
       </div>
 
       {/* 카드 목록 */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+      <div>
         <div className="mx-4 mt-2 mb-4">
           {isLoading ? (
             <div className="bg-white rounded-xl border border-gray-100 px-4 py-6 shadow-sm flex items-center justify-center">
@@ -326,6 +328,7 @@ export default function ScheduleListPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
