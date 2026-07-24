@@ -20,9 +20,9 @@ jobs:
           git -C D:\mobile_netra -c http.extraHeader="Authorization: token 99087cf491f0b27f896fc391c6eede9590369849" fetch origin
           git -C D:\mobile_netra reset --hard origin/main
 
-      - name: Stop PM2
+      - name: Stop node
         shell: cmd
-        run: pm2 stop mobile-netra 2>nul & exit 0
+        run: taskkill /F /IM node.exe /T 2>nul & echo done
 
       - name: Install dependencies
         working-directory: D:\mobile_netra
@@ -36,8 +36,8 @@ jobs:
           rmdir /s /q .next 2>nul & echo cache cleared
           npm run build
 
-      - name: PM2 restart
+      - name: PM2 start
         shell: cmd
         run: |
-          pm2 restart mobile-netra --update-env 2>&1 || pm2 start D:\mobile_netra\ecosystem.config.js 2>&1
+          pm2 start D:\mobile_netra\ecosystem.config.js 2>&1
           pm2 save
