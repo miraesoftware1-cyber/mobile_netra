@@ -6,6 +6,7 @@ import { resolveCompanyErpBaseUrl } from "@/lib/erp/resolve-company-erp-base-url
 const querySchema = z.object({
   companyCode: z.string().min(1),
   userId: z.string().min(1),
+  userType: z.string().optional(),
 });
 
 export interface MenuDBItem {
@@ -57,13 +58,14 @@ export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse({
     companyCode: searchParams.get("companyCode"),
     userId: searchParams.get("userId"),
+    userType: searchParams.get("userType") ?? undefined,
   });
 
   if (!parsed.success) {
     return NextResponse.json({ items: null });
   }
 
-  const { companyCode, userId } = parsed.data;
+  const { companyCode, userId, userType } = parsed.data;
 
   const resolved = await resolveCompanyErpBaseUrl(companyCode);
   if (resolved.status !== "ok") {
@@ -83,6 +85,15 @@ export async function GET(request: NextRequest) {
   const menuData: MenuApiResponse = await menuRes.json().catch(() => null);
   if (!menuData || menuData.Flag !== "0" || !menuData.items?.length) {
     return NextResponse.json({ items: null });
+  }
+
+  // 시스템관리자(user_type=S)는 모든 메뉴 풀 권한
+  if (userType === "S") {
+    const fullPerms: Record<string, MenuPerm> = {};
+    for (const m of menuData.items) {
+      fullPerms[m.menu_id] = { view: true, add: true, edit: true, del: true };
+    }
+    return NextResponse.json({ items: menuData.items, perms: fullPerms, raw_sample: null });
   }
 
   // 2. 사용자 권한 조회

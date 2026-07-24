@@ -24,6 +24,7 @@ interface EmpInfoApiResponse {
     emp_name: string;
     email?: string;
     user_id?: string;
+    user_type?: string;
   }>;
 }
 
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
     emp_name,
     email,
     user_id,
+    user_type,
   } = empInfoData.items[0];
 
   const resolvedEmail = (email ?? "").trim();
@@ -125,5 +127,6 @@ export async function POST(request: NextRequest) {
     emp_name,
     email: resolvedEmail,
     user_id: user_id ?? "",
+    user_type: user_type ?? "",
   });
 }

@@ -17,6 +17,7 @@ export default function MainLayout({
   const user        = useAuthStore((s) => s.user);
   const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
   const userId      = useAuthStore((s) => s.user?.user_id ?? "");
+  const userType    = useAuthStore((s) => s.user?.user_type ?? "");
   const setItems    = useMenuStore((s) => s.setItems);
   const setPerms    = useMenuStore((s) => s.setPerms);
 
@@ -33,7 +34,7 @@ export default function MainLayout({
 
     async function loadPerms() {
       try {
-        const params = new URLSearchParams({ companyCode, userId });
+        const params = new URLSearchParams({ companyCode, userId, userType });
         const r = await fetch(`/api/menu-visibility?${params.toString()}`);
         const data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean }> } = await r.json();
         if (Array.isArray(data.items)) setItems(data.items);
@@ -49,7 +50,7 @@ export default function MainLayout({
     }
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [companyCode, userId, setItems, setPerms]);
+  }, [companyCode, userId, userType, setItems, setPerms]);
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">

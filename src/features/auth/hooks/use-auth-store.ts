@@ -17,6 +17,7 @@ export interface AuthUser {
   emp_code: string;
   emp_name: string;
   user_id: string;
+  user_type: string;
 }
 
 interface AuthStore {
