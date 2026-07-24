@@ -15,7 +15,7 @@ import {
   getMonth,
 } from "date-fns";
 import { ko } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, CalendarSearch } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarSearch, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,15 @@ function expandToDayKeys(begDate: string, endDate: string): string[] {
 }
 
 type DisplayItem =
-  | { kind: "schedule"; beg_date: string; end_date: string; emp_name?: string; title: string; time?: string; remark?: string; key: string }
-  | { kind: "leave";    beg_date: string; end_date: string; emp_name?: string; title: string; emp_code: string; key: string };
+  | { kind: "schedule"; emp_code: string; beg_date: string; end_date: string; emp_name?: string; title: string; time?: string; remark?: string; key: string }
+  | { kind: "leave";    emp_code: string; beg_date: string; end_date: string; emp_name?: string; title: string; key: string };
+
+const FILTER_ACTIVE: Record<"all" | "휴가" | "일정", React.CSSProperties> = {
+  all:  { backgroundColor: "#374151", color: "#fff" },
+  휴가: { backgroundColor: "#6366f1", color: "#fff" },
+  일정: { backgroundColor: "#4a9e5c", color: "#fff" },
+};
+const FILTER_INACTIVE: React.CSSProperties = { backgroundColor: "#f3f4f6", color: "#6b7280" };
 
 export default function ScheduleListPage() {
   const router = useRouter();
@@ -59,6 +66,17 @@ export default function ScheduleListPage() {
   const pageTitle = useMenuTitle("SCH_02", "전체 일정 조회");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filter, setFilter] = useState<"all" | "휴가" | "일정">("all");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [myOnly, setMyOnly] = useState(false);
+
+  function prevMonth() {
+    setCurrentMonth((p) => subMonths(p, 1));
+    setSelectedDate(null);
+  }
+  function nextMonth() {
+    setCurrentMonth((p) => addMonths(p, 1));
+    setSelectedDate(null);
+  }
 
   const yearMonth = useMemo(() => {
     const y = getYear(currentMonth);
@@ -74,7 +92,6 @@ export default function ScheduleListPage() {
     return `${y}-${String(m).padStart(2, "0")}`;
   }, [currentMonth]);
 
-  /* ── 일정(CAL_SCD) ── */
   const { data: scheduleItems = [], isLoading: schedLoading } = useQuery({
     queryKey: ["sch02-cal-scd", user?.companyCode, yearMonth],
     queryFn: async () => {
@@ -88,7 +105,6 @@ export default function ScheduleListPage() {
     enabled: !!user?.companyCode,
   });
 
-  /* ── 전체 사원 휴가 ── */
   const { data: leaveItems = [], isLoading: leaveLoading } = useQuery<AllHolidayListItem[]>({
     queryKey: ["sch02-all-leave", user?.companyCode, user?.corp_code, calendarYear],
     queryFn: async () => {
@@ -108,32 +124,34 @@ export default function ScheduleListPage() {
 
   const isLoading = schedLoading || leaveLoading;
 
-  /* ── 캘린더 dot용 dayMap ── */
+  /* ── 캘린더 dot용 dayMap (myOnly 적용) ── */
   const scheduleDayMap = useMemo(() => {
     const m = new Set<string>();
-    for (const item of scheduleItems) {
+    const items = myOnly ? scheduleItems.filter((i) => i.emp_code === user?.emp_code) : scheduleItems;
+    for (const item of items) {
       for (const dk of expandToDayKeys(item.beg_date, item.end_date)) {
         if (dk.startsWith(monthPrefix)) m.add(dk);
       }
     }
     return m;
-  }, [scheduleItems, monthPrefix]);
+  }, [scheduleItems, monthPrefix, myOnly, user?.emp_code]);
 
   const leaveDayMap = useMemo(() => {
     const m = new Set<string>();
-    for (const item of leaveItems) {
+    const items = myOnly ? leaveItems.filter((i) => i.emp_code === user?.emp_code) : leaveItems;
+    for (const item of items) {
       if (!item.year_bdate || !item.year_edate) continue;
       for (const dk of expandToDayKeys(item.year_bdate, item.year_edate)) {
         if (dk.startsWith(monthPrefix)) m.add(dk);
       }
     }
     return m;
-  }, [leaveItems, monthPrefix]);
+  }, [leaveItems, monthPrefix, myOnly, user?.emp_code]);
 
-  /* ── 이번 달 통합 목록 ── */
   const monthItems = useMemo((): DisplayItem[] => {
     const sched: DisplayItem[] = scheduleItems.map((i) => ({
       kind: "schedule",
+      emp_code: i.emp_code,
       beg_date: i.beg_date,
       end_date: i.end_date,
       emp_name: i.emp_name,
@@ -147,10 +165,10 @@ export default function ScheduleListPage() {
       .filter((i) => i.year_bdate && ymdNorm(i.year_bdate).startsWith(yearMonth))
       .map((i) => ({
         kind: "leave" as const,
+        emp_code:  i.emp_code,
         beg_date:  i.year_bdate,
         end_date:  i.year_edate,
         emp_name:  i.emp_name,
-        emp_code:  i.emp_code,
         title:     i.holiday_typ,
         key:       `leave-${i.emp_code}-${i.year_bdate}`,
       }));
@@ -159,10 +177,24 @@ export default function ScheduleListPage() {
   }, [scheduleItems, leaveItems, yearMonth]);
 
   const filteredItems = useMemo(() => {
-    if (filter === "휴가") return monthItems.filter((i) => i.kind === "leave");
-    if (filter === "일정") return monthItems.filter((i) => i.kind === "schedule");
-    return monthItems;
-  }, [monthItems, filter]);
+    let items = monthItems;
+    if (filter === "휴가") items = items.filter((i) => i.kind === "leave");
+    else if (filter === "일정") items = items.filter((i) => i.kind === "schedule");
+    if (myOnly) items = items.filter((i) => i.emp_code === user?.emp_code);
+    if (selectedDate) {
+      const dk = selectedDate.replace(/-/g, "");
+      items = items.filter((i) => {
+        const start = ymdNorm(i.beg_date);
+        const end = ymdNorm(i.end_date);
+        return start <= dk && dk <= end;
+      });
+    }
+    return items;
+  }, [monthItems, filter, myOnly, selectedDate, user?.emp_code]);
+
+  const listTitle = selectedDate
+    ? format(new Date(`${selectedDate}T12:00:00`), "M월 d일 일정", { locale: ko })
+    : format(currentMonth, "M월 일정", { locale: ko });
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -192,15 +224,13 @@ export default function ScheduleListPage() {
       <div className="mx-4 mt-4 mb-2">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-            <button onClick={() => setCurrentMonth((p) => subMonths(p, 1))}
-              className="p-1 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">
+            <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">
               <ChevronLeft className="w-5 h-5 text-gray-600" />
             </button>
             <span className="font-bold text-gray-900 text-base">
               {format(currentMonth, "yyyy년 M월", { locale: ko })}
             </span>
-            <button onClick={() => setCurrentMonth((p) => addMonths(p, 1))}
-              className="p-1 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">
+            <button onClick={nextMonth} className="p-1 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">
               <ChevronRight className="w-5 h-5 text-gray-600" />
             </button>
           </div>
@@ -224,18 +254,25 @@ export default function ScheduleListPage() {
               const isToday = isSameDay(day, new Date());
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const dow = getDay(day);
+              const isSelected = dayKey === selectedDate;
               return (
-                <div key={dayKey} className={cn(
-                  "flex flex-col items-center justify-center py-1 mx-0.5 my-0.5 rounded-xl",
-                  isToday && "bg-primary/10",
-                  !isCurrentMonth && "opacity-30",
-                )}>
+                <div
+                  key={dayKey}
+                  onClick={() => setSelectedDate((prev) => prev === dayKey ? null : dayKey)}
+                  className={cn(
+                    "flex flex-col items-center justify-center py-1 mx-0.5 my-0.5 rounded-xl cursor-pointer active:opacity-70 transition-colors",
+                    isSelected && "ring-1 ring-inset ring-indigo-400 bg-indigo-50",
+                    !isSelected && isToday && "bg-primary/10",
+                    !isCurrentMonth && "opacity-30",
+                  )}
+                >
                   <span className={cn(
                     "text-sm leading-none",
-                    isToday && "font-bold text-primary",
-                    !isToday && dow === 0 && "text-red-400",
-                    !isToday && dow === 6 && "text-blue-400",
-                    !isToday && dow > 0 && dow < 6 && "text-gray-700",
+                    isSelected && "font-bold text-indigo-600",
+                    !isSelected && isToday && "font-bold text-primary",
+                    !isSelected && !isToday && dow === 0 && "text-red-400",
+                    !isSelected && !isToday && dow === 6 && "text-blue-400",
+                    !isSelected && !isToday && dow > 0 && dow < 6 && "text-gray-700",
                   )}>
                     {format(day, "d")}
                   </span>
@@ -255,21 +292,31 @@ export default function ScheduleListPage() {
       </div>
 
       {/* 목록 헤더 */}
-      <div className="mx-4 mt-2 flex items-center gap-2">
-        <span className="text-sm font-semibold text-gray-700">
-          {format(currentMonth, "M월 일정", { locale: ko })}
-        </span>
+      <div className="shrink-0 mx-4 mt-2 flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-semibold text-gray-700">{listTitle}</span>
         {monthItems.length > 0 && (
           <span className="text-xs font-medium text-white bg-gray-700 rounded-full px-2 py-0.5">
             {filteredItems.length}건
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => setMyOnly((v) => !v)}
+            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+            style={myOnly
+              ? { backgroundColor: "#1d4ed8", color: "#fff" }
+              : FILTER_INACTIVE}
+          >
+            <User className="w-3 h-3" />
+            내 일정
+          </button>
           {(["all", "휴가", "일정"] as const).map((f) => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                filter === f ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-500"
-              }`}>
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+              style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE}
+            >
               {f === "all" ? "전체" : f}
             </button>
           ))}
@@ -323,7 +370,11 @@ export default function ScheduleListPage() {
             <div className="bg-white rounded-xl border border-gray-100 px-4 py-6 shadow-sm flex flex-col items-center gap-2">
               <CalendarSearch className="w-8 h-8 text-gray-200" />
               <p className="text-sm text-gray-400">
-                {filter === "all" ? "이번 달 일정이 없습니다" : `이번 달 ${filter}이 없습니다`}
+                {selectedDate
+                  ? "해당 날짜에 일정이 없습니다"
+                  : myOnly
+                  ? "내 일정이 없습니다"
+                  : filter === "all" ? "이번 달 일정이 없습니다" : `이번 달 ${filter}이 없습니다`}
               </p>
             </div>
           )}
