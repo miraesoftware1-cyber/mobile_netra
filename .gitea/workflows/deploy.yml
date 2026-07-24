@@ -21,11 +21,8 @@ jobs:
           git -C D:\mobile_netra reset --hard origin/main
 
       - name: Stop app
-        shell: powershell
-        run: |
-          $conn = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue
-          if ($conn) { Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue }
-          Write-Host "done"
+        shell: cmd
+        run: pm2 stop mobile-netra 2>nul & echo done
 
       - name: Install dependencies
         working-directory: D:\mobile_netra
