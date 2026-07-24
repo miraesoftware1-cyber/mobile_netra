@@ -20,9 +20,12 @@ jobs:
           git -C D:\mobile_netra -c http.extraHeader="Authorization: token 99087cf491f0b27f896fc391c6eede9590369849" fetch origin
           git -C D:\mobile_netra reset --hard origin/main
 
-      - name: Stop node
-        shell: cmd
-        run: taskkill /F /IM node.exe /T 2>nul & echo done
+      - name: Stop app
+        shell: powershell
+        run: |
+          $conn = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue
+          if ($conn) { Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue }
+          Write-Host "done"
 
       - name: Install dependencies
         working-directory: D:\mobile_netra
@@ -36,8 +39,6 @@ jobs:
           rmdir /s /q .next 2>nul & echo cache cleared
           npm run build
 
-      - name: PM2 start
+      - name: Start app
         shell: cmd
-        run: |
-          pm2 delete mobile-netra 2>nul & echo deleted
-          pm2 start D:\mobile_netra\ecosystem.config.js 2>&1
+        run: pm2 restart mobile-netra 2>nul || pm2 start D:\mobile_netra\ecosystem.config.js
