@@ -306,12 +306,11 @@ export default function ScheduleListPage() {
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={() => setMyOnly((v) => !v)}
-            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+            className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
             style={myOnly
               ? { backgroundColor: "#60a5fa", color: "#fff", fontWeight: 700 }
               : { backgroundColor: "#fef3c7", color: "#d97706", fontWeight: 700 }}
           >
-            <User className="w-3 h-3" />
             {myOnly ? "내 일정" : "전체 일정"}
           </button>
           {(["all", "휴가", "일정"] as const).map((f) => (
