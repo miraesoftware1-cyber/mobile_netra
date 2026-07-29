@@ -21,7 +21,7 @@ jobs:
           git -C D:\mobile_netra reset --hard origin/main
 
       - name: Stop app
-        shell: pwsh
+        shell: powershell
         run: |
           $p = Start-Process "pm2" -ArgumentList "stop","mobile-netra" -NoNewWindow -PassThru
           if ($p -and -not $p.WaitForExit(30000)) { $p.Kill() }
