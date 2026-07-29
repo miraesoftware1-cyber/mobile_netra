@@ -23,10 +23,11 @@ jobs:
       - name: Stop app
         shell: powershell
         run: |
+          $ErrorActionPreference = "SilentlyContinue"
           $pidFile = "C:\Users\admin\.pm2\pm2.pid"
           $daemonRunning = $false
           if (Test-Path $pidFile) {
-            $pm2Pid = [int](Get-Content $pidFile -Raw -ErrorAction SilentlyContinue)
+            $pm2Pid = [int]((Get-Content $pidFile -Raw).Trim())
             $daemonRunning = $null -ne (Get-Process -Id $pm2Pid -ErrorAction SilentlyContinue)
           }
           if ($daemonRunning) {
@@ -35,6 +36,7 @@ jobs:
             Write-Host "PM2 daemon not running, skipping stop"
           }
           Write-Host "done"
+          exit 0
 
       - name: Install dependencies
         working-directory: D:\mobile_netra
