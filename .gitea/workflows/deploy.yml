@@ -23,8 +23,17 @@ jobs:
       - name: Stop app
         shell: powershell
         run: |
-          $p = Start-Process "cmd" -ArgumentList "/c","pm2 stop mobile-netra 2>nul" -NoNewWindow -PassThru -ErrorAction SilentlyContinue
-          if ($p -and -not $p.WaitForExit(30000)) { $p.Kill() }
+          $pidFile = "C:\Users\admin\.pm2\pm2.pid"
+          $daemonRunning = $false
+          if (Test-Path $pidFile) {
+            $pm2Pid = [int](Get-Content $pidFile -Raw -ErrorAction SilentlyContinue)
+            $daemonRunning = $null -ne (Get-Process -Id $pm2Pid -ErrorAction SilentlyContinue)
+          }
+          if ($daemonRunning) {
+            & cmd /c "pm2 stop mobile-netra --kill-timeout 5000 2>nul"
+          } else {
+            Write-Host "PM2 daemon not running, skipping stop"
+          }
           Write-Host "done"
 
       - name: Install dependencies
