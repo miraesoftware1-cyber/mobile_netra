@@ -308,11 +308,11 @@ export default function ScheduleListPage() {
             onClick={() => setMyOnly((v) => !v)}
             className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
             style={myOnly
-              ? { backgroundColor: "#1d4ed8", color: "#fff", fontWeight: 700 }
-              : { backgroundColor: "#f3f4f6", color: "#6b7280" }}
+              ? { backgroundColor: "#60a5fa", color: "#fff", fontWeight: 700 }
+              : { backgroundColor: "#fef3c7", color: "#d97706", fontWeight: 700 }}
           >
             <User className="w-3 h-3" />
-            내 일정
+            {myOnly ? "내 일정" : "전체 일정"}
           </button>
           {(["all", "휴가", "일정"] as const).map((f) => (
             <button
@@ -321,7 +321,7 @@ export default function ScheduleListPage() {
               className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
               style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE[f]}
             >
-              {f === "all" ? "전체" : f}
+              {f === "all" ? "휴가·일정" : f}
             </button>
           ))}
         </div>

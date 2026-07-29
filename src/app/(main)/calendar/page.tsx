@@ -340,7 +340,7 @@ export default function CalendarPage() {
                   className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
                   style={filter === f ? FILTER_ACTIVE[f] : FILTER_INACTIVE[f]}
                 >
-                  {f === "all" ? "전체" : f}
+                  {f === "all" ? "휴가·일정" : f}
                 </button>
               ))}
             </div>
