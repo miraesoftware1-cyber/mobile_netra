@@ -23,7 +23,7 @@ jobs:
       - name: Stop app
         shell: powershell
         run: |
-          $p = Start-Process "pm2" -ArgumentList "stop","mobile-netra" -NoNewWindow -PassThru
+          $p = Start-Process "cmd" -ArgumentList "/c","pm2 stop mobile-netra 2>nul" -NoNewWindow -PassThru -ErrorAction SilentlyContinue
           if ($p -and -not $p.WaitForExit(30000)) { $p.Kill() }
           Write-Host "done"
 
