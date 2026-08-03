@@ -1,6 +1,6 @@
 # 서버 구성 (9번 서버)
 
-Gitea와 Actions Runner는 **9번 서버**에서 운영됩니다.
+Gitea와 Actions Runner는 **9번 서버**에서 운영됩니다. (act_runner v0.2.11, host 모드)
 
 ## Gitea
 
