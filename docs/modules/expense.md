@@ -28,7 +28,7 @@
 ## API 라우트
 
 | 경로 | 메서드 | 설명 |
-|------|--------|------|
+|------|--------|------| It's
 | `/api/expense/expense-list` | GET | 지출결의 목록 조회 |
 | `/api/expense/resolution-items` | GET | 결의 항목 조회 |
 | `/api/expense/insert-resolution` | POST | 지출결의 등록 |
