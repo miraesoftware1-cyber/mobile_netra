@@ -84,6 +84,7 @@ export default function MenuPage() {
   const router = useRouter();
   const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
   const userId      = useAuthStore((s) => s.user?.user_id ?? "");
+  const userType    = useAuthStore((s) => s.user?.user_type ?? "");
   const leaderFlag  = useAuthStore((s) => s.user?.leader_flag);
   const companyName = useAuthStore((s) => s.user?.corp_name);
 
@@ -102,7 +103,7 @@ export default function MenuPage() {
       setDbLoaded(true);
       return;
     }
-    const params = new URLSearchParams({ companyCode, userId });
+    const params = new URLSearchParams({ companyCode, userId, userType });
     fetch(`/api/menu-visibility?${params.toString()}`)
       .then((r) => r.json())
       .then((data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean }> }) => {
@@ -114,7 +115,7 @@ export default function MenuPage() {
       .catch(() => {
         setDbLoaded(true);
       });
-  }, [companyCode, userId]);
+  }, [companyCode, userId, userType]);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(MENU_COLLAPSE_STORAGE_KEY);
