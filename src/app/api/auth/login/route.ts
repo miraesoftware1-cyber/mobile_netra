@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
     mobile_flag,
   } = empInfoData.items[0];
 
-  if ((mobile_flag ?? "").toUpperCase() !== "Y") {
+  const isSystemAdmin = (user_type ?? "").toUpperCase() === "S";
+  if (!isSystemAdmin && (mobile_flag ?? "").toUpperCase() !== "Y") {
     return NextResponse.json(
       { error: "모바일 앱 사용 권한이 없습니다." },
       { status: 403 },
