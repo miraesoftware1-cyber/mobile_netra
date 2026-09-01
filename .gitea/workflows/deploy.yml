@@ -50,20 +50,8 @@ jobs:
           npm run build
 
       - name: Start app
-        shell: powershell
+        shell: cmd
         run: |
-          $logOut = "D:\mobile_netra\next-out.log"
-          $logErr = "D:\mobile_netra\next-err.log"
-          Start-Process -FilePath "node" `
-            -ArgumentList "node_modules/.bin/next","start","-p","3001" `
-            -WorkingDirectory "D:\mobile_netra" `
-            -RedirectStandardOutput $logOut `
-            -RedirectStandardError $logErr `
-            -NoNewWindow
-          Start-Sleep -Seconds 4
-          $running = netstat -ano | Select-String ":3001.*LISTENING"
-          if ($running) {
-            Write-Host "App started successfully on port 3001"
-          } else {
-            Write-Host "WARNING: port 3001 not detected yet"
-          }
+          start /B /D D:\mobile_netra cmd /c "node node_modules\.bin\next start -p 3001 > D:\mobile_netra\next-out.log 2> D:\mobile_netra\next-err.log"
+          ping -n 5 127.0.0.1 > nul
+          netstat -ano | findstr ":3001"
