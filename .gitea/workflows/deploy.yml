@@ -52,6 +52,6 @@ jobs:
       - name: Start app
         shell: cmd
         run: |
-          start /B /D D:\mobile_netra cmd /c "node node_modules\.bin\next start -p 3001 > D:\mobile_netra\next-out.log 2> D:\mobile_netra\next-err.log"
+          start /B /D D:\mobile_netra cmd /c "node_modules\.bin\next.cmd start -p 3001 > D:\mobile_netra\next-out.log 2> D:\mobile_netra\next-err.log"
           ping -n 5 127.0.0.1 > nul
           netstat -ano | findstr ":3001"
