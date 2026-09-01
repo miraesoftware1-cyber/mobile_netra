@@ -23,11 +23,14 @@ export interface AuthUser {
 interface AuthStore {
   user: AuthUser | null;
   biometricRegisteredMap: Record<string, true>;
+  deviceTokenMap: Record<string, true>;
   login: (user: AuthUser) => void;
   logout: () => void;
   isLoggedIn: () => boolean;
   hasBiometricRegistered: (companyCode: string, phoneNumber: string) => boolean;
   registerBiometric: (companyCode: string, phoneNumber: string) => void;
+  hasDeviceRegistered: (companyCode: string, phoneNumber: string) => boolean;
+  registerDevice: (companyCode: string, phoneNumber: string) => void;
 }
 
 const toBiometricKey = (companyCode: string, phoneNumber: string) =>
@@ -38,6 +41,7 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       user: null,
       biometricRegisteredMap: {},
+      deviceTokenMap: {},
       login: (user) => set({ user }),
       logout: () => set({ user: null }),
       isLoggedIn: () => get().user !== null,
@@ -52,6 +56,16 @@ export const useAuthStore = create<AuthStore>()(
             ...state.biometricRegisteredMap,
             [key]: true,
           },
+        }));
+      },
+      hasDeviceRegistered: (companyCode, phoneNumber) => {
+        const key = toBiometricKey(companyCode, phoneNumber);
+        return Boolean(get().deviceTokenMap[key]);
+      },
+      registerDevice: (companyCode, phoneNumber) => {
+        const key = toBiometricKey(companyCode, phoneNumber);
+        set((state) => ({
+          deviceTokenMap: { ...state.deviceTokenMap, [key]: true },
         }));
       },
     }),

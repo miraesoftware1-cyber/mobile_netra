@@ -5,13 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import {
-  Building2,
-  Fingerprint,
-  LogIn,
-  Phone,
-  ShieldCheck,
-} from "lucide-react";
+import { Building2, LogIn, Phone, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +14,8 @@ import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import {
   fetchLogin,
   type LoginSuccessData,
-  requestEmailCode,
-  verifyEmailCode,
+  requestSmsCode,
+  verifySmsCode,
 } from "@/features/auth/api";
 
 const loginSchema = z.object({
@@ -32,10 +26,7 @@ const loginSchema = z.object({
   phoneNumber: z
     .string()
     .min(1, "전화번호를 입력해주세요")
-    .regex(
-      /^[0-9]{10,11}$/,
-      "올바른 전화번호를 입력해주세요 (숫자만, 10~11자리)",
-    ),
+    .regex(/^[0-9]{10,11}$/, "올바른 전화번호를 입력해주세요 (숫자만, 10~11자리)"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -46,47 +37,47 @@ type PendingAuthContext = {
   userData: LoginSuccessData;
 };
 
-const generateRandomBytes = (size: number) => {
-  const bytes = new Uint8Array(size);
-  crypto.getRandomValues(bytes);
-  return bytes;
-};
-
-const toUserIdBytes = (value: string) => {
-  const encoded = new TextEncoder().encode(value);
-  return encoded.slice(0, 64);
-};
+type AnyResult = { success: boolean };
+const getErr = (r: AnyResult): string =>
+  ((r as { success: false; error: string }).error) ?? "오류가 발생했습니다.";
 
 export function LoginForm() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
-  const hasBiometricRegistered = useAuthStore((s) => s.hasBiometricRegistered);
-  const registerBiometric = useAuthStore((s) => s.registerBiometric);
+  const hasDeviceRegistered = useAuthStore((s) => s.hasDeviceRegistered);
+  const registerDevice = useAuthStore((s) => s.registerDevice);
+
   const [serverError, setServerError] = useState<string | null>(null);
-  const [pendingAuth, setPendingAuth] = useState<PendingAuthContext | null>(
-    null,
-  );
-  const [emailCode, setEmailCode] = useState("");
+  const [pendingAuth, setPendingAuth] = useState<PendingAuthContext | null>(null);
+  const [smsCode, setSmsCode] = useState("");
   const [isCodeSent, setIsCodeSent] = useState(false);
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isSmsVerified, setIsSmsVerified] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-  const [isRegisteringBiometric, setIsRegisteringBiometric] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-  });
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
+
+  const completeLogin = (context: PendingAuthContext) => {
+    const { emailVerificationEnabled: _ev, ...authFields } = context.userData;
+    void _ev;
+    login({
+      companyCode: context.companyCode,
+      phoneNumber: context.phoneNumber,
+      ...authFields,
+    });
+    router.push("/menu");
+  };
 
   const onSubmit = async (data: LoginFormValues) => {
     setServerError(null);
     setPendingAuth(null);
-    setEmailCode("");
+    setSmsCode("");
     setIsCodeSent(false);
-    setIsEmailVerified(false);
+    setIsSmsVerified(false);
 
     const result = await fetchLogin({
       companyCode: data.companyCode,
@@ -94,165 +85,92 @@ export function LoginForm() {
     });
 
     if (!result.success) {
-      const failResult = result as { success: false; error: string };
-      setServerError(failResult.error);
+      setServerError((result as { success: false; error: string }).error);
       return;
     }
 
-    const skipEmailAndBiometricOnboarding =
-      !result.data.emailVerificationEnabled ||
-      hasBiometricRegistered(data.companyCode, data.phoneNumber);
-
-    if (skipEmailAndBiometricOnboarding) {
-      const { emailVerificationEnabled: _ev, ...authFields } = result.data;
-      void _ev;
-      login({
+    // 이미 기기 등록된 경우 → 바로 로그인
+    if (hasDeviceRegistered(data.companyCode, data.phoneNumber)) {
+      completeLogin({
         companyCode: data.companyCode,
         phoneNumber: data.phoneNumber,
-        ...authFields,
+        userData: result.data,
       });
-      router.push("/menu");
       return;
     }
 
-    setPendingAuth({
+    // 최초 로그인 → SMS OTP 단계로
+    const pending: PendingAuthContext = {
       companyCode: data.companyCode,
       phoneNumber: data.phoneNumber,
       userData: result.data,
-    });
-  };
+    };
+    setPendingAuth(pending);
 
-  const handleSendEmailCode = async () => {
-    if (!pendingAuth) {
-      return;
-    }
-
-    setServerError(null);
+    // SMS 자동 발송
     setIsSendingCode(true);
-
-    const response = await requestEmailCode({
-      email: pendingAuth.userData.email,
-    });
+    const smsResult = await requestSmsCode({ phoneNumber: data.phoneNumber });
     setIsSendingCode(false);
 
-    if (response.success === false) {
-      setServerError(response.error);
+    if (!smsResult.success) {
+      setServerError(getErr(smsResult));
       return;
     }
-
     setIsCodeSent(true);
   };
 
-  const handleVerifyEmailCode = async () => {
-    if (!pendingAuth) {
+  const handleResendSmsCode = async () => {
+    if (!pendingAuth) return;
+    setServerError(null);
+    setIsSendingCode(true);
+    const result = await requestSmsCode({ phoneNumber: pendingAuth.phoneNumber });
+    setIsSendingCode(false);
+    if (!result.success) {
+      setServerError(getErr(result));
       return;
     }
+    setSmsCode("");
+    setIsSmsVerified(false);
+    setIsCodeSent(true);
+  };
 
+  const handleVerifySmsCode = async () => {
+    if (!pendingAuth) return;
     setServerError(null);
     setIsVerifyingCode(true);
-
-    const response = await verifyEmailCode({
-      email: pendingAuth.userData.email,
-      code: emailCode,
+    const result = await verifySmsCode({
+      phoneNumber: pendingAuth.phoneNumber,
+      code: smsCode,
     });
     setIsVerifyingCode(false);
 
-    if (response.success === false) {
-      setServerError(response.error);
+    if (!result.success) {
+      setServerError(getErr(result));
       return;
     }
 
-    setIsEmailVerified(true);
+    setIsSmsVerified(true);
+    registerDevice(pendingAuth.companyCode, pendingAuth.phoneNumber);
+    completeLogin(pendingAuth);
   };
 
-  const registerWebAuthnCredential = async (context: PendingAuthContext) => {
-    if (!window.PublicKeyCredential) {
-      throw new Error("현재 기기에서는 생체 인증 등록을 지원하지 않습니다.");
-    }
-
-    const credential = await navigator.credentials.create({
-      publicKey: {
-        challenge: generateRandomBytes(32),
-        rp: { name: "Netra" },
-        user: {
-          id: toUserIdBytes(`${context.companyCode}:${context.phoneNumber}`),
-          name:
-            context.userData.email.trim() !== ""
-              ? context.userData.email
-              : `${context.companyCode}:${context.phoneNumber}`,
-          displayName: context.userData.emp_name,
-        },
-        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-        authenticatorSelection: {
-          authenticatorAttachment: "platform",
-          userVerification: "required",
-          residentKey: "preferred",
-        },
-        timeout: 60_000,
-        attestation: "none",
-      },
-    });
-
-    if (!credential) {
-      throw new Error("생체 인증 등록을 완료하지 못했습니다.");
-    }
-  };
-
-  const handleRegisterBiometricAndLogin = async () => {
-    const needsEmailStep = pendingAuth?.userData.emailVerificationEnabled ?? true;
-    if (!pendingAuth || (needsEmailStep && !isEmailVerified)) {
-      return;
-    }
-
-    setServerError(null);
-    setIsRegisteringBiometric(true);
-
-    try {
-      await registerWebAuthnCredential(pendingAuth);
-      registerBiometric(pendingAuth.companyCode, pendingAuth.phoneNumber);
-
-      const { emailVerificationEnabled: _ev, ...authFields } =
-        pendingAuth.userData;
-      void _ev;
-      login({
-        companyCode: pendingAuth.companyCode,
-        phoneNumber: pendingAuth.phoneNumber,
-        ...authFields,
-      });
-
-      router.push("/menu");
-    } catch (error) {
-      setServerError(
-        error instanceof Error
-          ? error.message
-          : "생체 인증 등록 중 오류가 발생했습니다.",
-      );
-    } finally {
-      setIsRegisteringBiometric(false);
-    }
-  };
-
-  const isFirstLoginFlow = Boolean(pendingAuth);
-  const submitButtonLabel = isFirstLoginFlow ? "다음" : "로그인";
-
-  const isAuthCodeValid = /^[0-9]{6}$/.test(emailCode);
-  const handleGoBackToCredentialStep = () => {
+  const handleGoBack = () => {
     setPendingAuth(null);
-    setEmailCode("");
+    setSmsCode("");
     setIsCodeSent(false);
-    setIsEmailVerified(false);
+    setIsSmsVerified(false);
     setServerError(null);
   };
+
+  const isCodeValid = /^[0-9]{6}$/.test(smsCode);
+  const isOtpStep = Boolean(pendingAuth);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      {!isFirstLoginFlow && (
+      {!isOtpStep && (
         <>
           <div className="flex flex-col gap-2">
-            <Label
-              htmlFor="companyCode"
-              className="text-sm font-medium text-gray-700"
-            >
+            <Label htmlFor="companyCode" className="text-sm font-medium text-gray-700">
               회사 코드
             </Label>
             <div className="relative">
@@ -265,17 +183,12 @@ export function LoginForm() {
               />
             </div>
             {errors.companyCode && (
-              <p className="text-xs text-red-500">
-                {errors.companyCode.message}
-              </p>
+              <p className="text-xs text-red-500">{errors.companyCode.message}</p>
             )}
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label
-              htmlFor="phoneNumber"
-              className="text-sm font-medium text-gray-700"
-            >
+            <Label htmlFor="phoneNumber" className="text-sm font-medium text-gray-700">
               전화번호
             </Label>
             <div className="relative">
@@ -290,9 +203,7 @@ export function LoginForm() {
               />
             </div>
             {errors.phoneNumber && (
-              <p className="text-xs text-red-500">
-                {errors.phoneNumber.message}
-              </p>
+              <p className="text-xs text-red-500">{errors.phoneNumber.message}</p>
             )}
           </div>
         </>
@@ -302,124 +213,78 @@ export function LoginForm() {
         <p className="text-sm text-red-500 text-center -mt-1">{serverError}</p>
       )}
 
-      {!isFirstLoginFlow && (
+      {!isOtpStep && (
         <Button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isSendingCode}
           className="h-12 text-base font-semibold mt-2 gap-2"
         >
           <LogIn className="w-4 h-4" />
-          {isSubmitting ? "확인 중..." : submitButtonLabel}
+          {isSubmitting || isSendingCode ? "확인 중..." : "로그인"}
         </Button>
       )}
 
-      {isFirstLoginFlow && pendingAuth && (
+      {isOtpStep && pendingAuth && (
         <div className="flex flex-col gap-4">
           <div className="text-sm text-gray-700">
             <p>
-              {pendingAuth.userData.emailVerificationEnabled ? (
-                <>
-                  최초 로그인입니다. 이메일 인증 후 지문/Face 등록을 완료하면 다음
-                  로그인부터는 회사코드와 전화번호만으로 로그인됩니다.
-                </>
-              ) : (
-                <>
-                  최초 로그인입니다. 지문/Face 등록을 완료하면 다음 로그인부터는
-                  회사코드와 전화번호만으로 로그인됩니다.
-                </>
-              )}
+              <span className="font-semibold">{pendingAuth.phoneNumber}</span>으로
+              인증번호를 발송했습니다.
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              인증 완료 후 이 기기에서는 다음 로그인부터 바로 접속됩니다.
             </p>
           </div>
 
-          {pendingAuth.userData.emailVerificationEnabled && (
-            <>
-              <div className="flex flex-col gap-2">
-                <Label
-                  htmlFor="email"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  이메일
-                </Label>
-                <Input
-                  id="email"
-                  value={pendingAuth.userData.email}
-                  disabled
-                  className="h-11"
-                />
-              </div>
+          <div className="flex gap-2">
+            <Input
+              value={smsCode}
+              onChange={(e) =>
+                setSmsCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && isCodeValid && !isVerifyingCode && !isSmsVerified) {
+                  e.preventDefault();
+                  handleVerifySmsCode();
+                }
+              }}
+              placeholder="6자리 인증번호"
+              inputMode="numeric"
+              disabled={isSmsVerified}
+              className="h-11 text-center text-lg tracking-widest"
+              autoFocus
+            />
+            <Button
+              type="button"
+              onClick={handleVerifySmsCode}
+              disabled={!isCodeValid || isVerifyingCode || isSmsVerified}
+              className="h-11 min-w-[90px]"
+            >
+              {isVerifyingCode ? "확인 중..." : isSmsVerified ? "완료" : "확인"}
+            </Button>
+          </div>
 
-              <Button
-                type="button"
-                onClick={handleSendEmailCode}
-                disabled={isSendingCode}
-                className="h-11 bg-black text-white hover:bg-black/90"
-              >
-                {isSendingCode
-                  ? "인증번호 발송 중..."
-                  : isCodeSent
-                    ? "인증번호 재발송"
-                    : "인증번호 발송"}
-              </Button>
-
-              <div className="flex gap-2">
-                <Input
-                  value={emailCode}
-                  onChange={(event) =>
-                    setEmailCode(
-                      event.target.value.replace(/\D/g, "").slice(0, 6),
-                    )
-                  }
-                  placeholder="6자리 인증번호 입력"
-                  inputMode="numeric"
-                  disabled={!isCodeSent || isEmailVerified}
-                  className="h-11"
-                />
-                <Button
-                  type="button"
-                  onClick={handleVerifyEmailCode}
-                  disabled={
-                    !isCodeSent ||
-                    !isAuthCodeValid ||
-                    isVerifyingCode ||
-                    isEmailVerified
-                  }
-                  className="h-11 min-w-[120px]"
-                >
-                  {isVerifyingCode
-                    ? "확인 중..."
-                    : isEmailVerified
-                      ? "확인 완료"
-                      : "인증 확인"}
-                </Button>
-              </div>
-            </>
-          )}
-
-          <Button
-            type="button"
-            onClick={handleRegisterBiometricAndLogin}
-            disabled={
-              (pendingAuth.userData.emailVerificationEnabled &&
-                !isEmailVerified) ||
-              isRegisteringBiometric
-            }
-            className="h-11 gap-2"
-          >
-            <Fingerprint className="w-4 h-4" />
-            {isRegisteringBiometric ? "등록 중..." : "지문/Face 등록 후 로그인"}
-          </Button>
-
-          {pendingAuth.userData.emailVerificationEnabled && isEmailVerified && (
+          {isSmsVerified && (
             <div className="flex items-center gap-2 text-xs text-green-700">
               <ShieldCheck className="w-4 h-4" />
-              <span>이메일 인증이 완료되었습니다.</span>
+              <span>인증이 완료되었습니다.</span>
             </div>
           )}
 
           <Button
             type="button"
+            variant="outline"
+            onClick={handleResendSmsCode}
+            disabled={isSendingCode || isSmsVerified}
+            className="h-11"
+          >
+            {isSendingCode ? "발송 중..." : "인증번호 재발송"}
+          </Button>
+
+          <Button
+            type="button"
             className="h-11 bg-black text-white hover:bg-black/90"
-            onClick={handleGoBackToCredentialStep}
+            onClick={handleGoBack}
           >
             뒤로가기
           </Button>

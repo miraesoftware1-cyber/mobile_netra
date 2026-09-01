@@ -79,3 +79,37 @@ export async function verifyEmailCode(payload: VerifyEmailCodePayload): Promise<
 
   return { success: true };
 }
+
+export async function requestSmsCode(payload: { phoneNumber: string }): Promise<EmailCodeResult> {
+  const res = await fetch('/api/auth/request-sms-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData: LoginErrorResponse = await res.json().catch(() => ({
+      error: '인증번호 발송에 실패했습니다.',
+    }));
+    return { success: false, error: errorData.error };
+  }
+
+  return { success: true };
+}
+
+export async function verifySmsCode(payload: { phoneNumber: string; code: string }): Promise<EmailCodeResult> {
+  const res = await fetch('/api/auth/verify-sms-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData: LoginErrorResponse = await res.json().catch(() => ({
+      error: '인증번호 확인에 실패했습니다.',
+    }));
+    return { success: false, error: errorData.error };
+  }
+
+  return { success: true };
+}
