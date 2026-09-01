@@ -24,17 +24,16 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "SilentlyContinue"
-          $pidFile = "C:\Users\admin\.pm2\pm2.pid"
-          $daemonRunning = $false
-          if (Test-Path $pidFile) {
-            $pm2Pid = [int]((Get-Content $pidFile -Raw).Trim())
-            $daemonRunning = $null -ne (Get-Process -Id $pm2Pid -ErrorAction SilentlyContinue)
+          $lines = netstat -ano | Select-String "0\.0\.0\.0:3001\s.*LISTENING|:::3001\s.*LISTENING"
+          foreach ($line in $lines) {
+            $parts = $line.Line.Trim() -split '\s+'
+            $procId = $parts[-1]
+            if ($procId -match '^\d+$') {
+              Write-Host "Killing PID $procId on port 3001"
+              taskkill /F /PID $procId 2>$null
+            }
           }
-          if ($daemonRunning) {
-            & cmd /c "pm2 stop mobile-netra --kill-timeout 5000 2>nul"
-          } else {
-            Write-Host "PM2 daemon not running, skipping stop"
-          }
+          Start-Sleep -Seconds 2
           Write-Host "done"
           exit 0
 
@@ -51,5 +50,20 @@ jobs:
           npm run build
 
       - name: Start app
-        shell: cmd
-        run: pm2 restart mobile-netra 2>nul || pm2 start D:\mobile_netra\ecosystem.config.js
+        shell: powershell
+        run: |
+          $logOut = "D:\mobile_netra\next-out.log"
+          $logErr = "D:\mobile_netra\next-err.log"
+          Start-Process -FilePath "node" `
+            -ArgumentList "node_modules/.bin/next","start","-p","3001" `
+            -WorkingDirectory "D:\mobile_netra" `
+            -RedirectStandardOutput $logOut `
+            -RedirectStandardError $logErr `
+            -NoNewWindow
+          Start-Sleep -Seconds 4
+          $running = netstat -ano | Select-String ":3001.*LISTENING"
+          if ($running) {
+            Write-Host "App started successfully on port 3001"
+          } else {
+            Write-Host "WARNING: port 3001 not detected yet"
+          }
