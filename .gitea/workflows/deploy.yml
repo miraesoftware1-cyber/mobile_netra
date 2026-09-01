@@ -50,8 +50,17 @@ jobs:
           npm run build
 
       - name: Start app
-        shell: cmd
+        shell: powershell
         run: |
-          start /B /D D:\mobile_netra cmd /c "node_modules\.bin\next.cmd start -p 3001 > D:\mobile_netra\next-out.log 2> D:\mobile_netra\next-err.log"
-          ping -n 5 127.0.0.1 > nul
-          netstat -ano | findstr ":3001"
+          Start-Process -FilePath "D:\mobile_netra\node_modules\.bin\next.cmd" `
+            -ArgumentList "start","-p","3001" `
+            -WorkingDirectory "D:\mobile_netra" `
+            -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+          $listening = netstat -ano | Select-String ":3001.*LISTENING"
+          if ($listening) {
+            Write-Host "App started on port 3001"
+          } else {
+            Write-Host "ERROR: App not listening on port 3001"
+            exit 1
+          }
