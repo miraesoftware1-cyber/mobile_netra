@@ -39,7 +39,7 @@ const SELECT_ALL_CHECKBOX_ID = 'leave-approval-select-all';
 
 type ActionType = 'approve' | 'cancel';
 
-export function LeaveApprovalList() {
+export function LeaveApprovalList({ canApprove }: { canApprove: boolean }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
@@ -221,19 +221,21 @@ export function LeaveApprovalList() {
         {items.length > 0 && (
           <div className="flex items-center justify-between px-1">
             <span className="text-xs text-gray-400">총 {items.length}건</span>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
-              <Checkbox
-                id={SELECT_ALL_CHECKBOX_ID}
-                checked={allSelected}
-                onCheckedChange={toggleAll}
-              />
-              <label
-                htmlFor={SELECT_ALL_CHECKBOX_ID}
-                className="cursor-pointer select-none hover:text-gray-700"
-              >
-                전체 선택
-              </label>
-            </div>
+            {canApprove && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                <Checkbox
+                  id={SELECT_ALL_CHECKBOX_ID}
+                  checked={allSelected}
+                  onCheckedChange={toggleAll}
+                />
+                <label
+                  htmlFor={SELECT_ALL_CHECKBOX_ID}
+                  className="cursor-pointer select-none hover:text-gray-700"
+                >
+                  전체 선택
+                </label>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -252,22 +254,25 @@ export function LeaveApprovalList() {
               return (
                 <div
                   key={rowKey}
-                  onClick={() => toggleKey(rowKey)}
+                  onClick={() => canApprove && toggleKey(rowKey)}
                   className={[
-                    'bg-white rounded-xl border shadow-sm px-4 py-3.5 flex gap-3 cursor-pointer transition-colors',
+                    'bg-white rounded-xl border shadow-sm px-4 py-3.5 flex gap-3 transition-colors',
+                    canApprove ? 'cursor-pointer' : 'cursor-default',
                     isSelected ? 'border-primary/40 bg-primary/5' : 'border-gray-100',
                   ].join(' ')}
                 >
-                  <div
-                    className="pt-0.5 flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => toggleKey(rowKey)}
-                      aria-label={`${item.emp_name} 선택`}
-                    />
-                  </div>
+                  {canApprove && (
+                    <div
+                      className="pt-0.5 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleKey(rowKey)}
+                        aria-label={`${item.emp_name} 선택`}
+                      />
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-2.5 flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -327,20 +332,22 @@ export function LeaveApprovalList() {
         >
           취소
         </Button>
-        <Button
-          className="flex-1 h-12 font-semibold gap-2"
-          disabled={selectedKeys.size === 0 || mutation.isPending}
-          onClick={() => handleAction('approve')}
-        >
-          {mutation.isPending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              <CalendarRange className="w-4 h-4" />
-              {`승인하기${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
-            </>
-          )}
-        </Button>
+        {canApprove && (
+          <Button
+            className="flex-1 h-12 font-semibold gap-2"
+            disabled={selectedKeys.size === 0 || mutation.isPending}
+            onClick={() => handleAction('approve')}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <CalendarRange className="w-4 h-4" />
+                {`승인하기${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       <AlertDialog open={pendingAction !== null} onOpenChange={() => setPendingAction(null)}>

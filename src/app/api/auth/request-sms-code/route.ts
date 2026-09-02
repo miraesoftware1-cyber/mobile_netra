@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { issueSmsCode } from "@/app/api/auth/_lib/sms-code-store";
+import { issueSmsCode, checkRateLimit } from "@/app/api/auth/_lib/sms-code-store";
 import { sendSms } from "@/lib/sens/send-sms";
 
 const schema = z.object({
@@ -15,6 +15,15 @@ export async function POST(request: NextRequest) {
   }
 
   const { phoneNumber } = parsed.data;
+
+  const rateLimit = await checkRateLimit(phoneNumber);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "비정상적인 접근이 감지되어 일시적으로 차단되었습니다. 시간이 지난 후 다시 시도해주세요." },
+      { status: 429 },
+    );
+  }
+
   const code = issueSmsCode(phoneNumber);
 
   try {

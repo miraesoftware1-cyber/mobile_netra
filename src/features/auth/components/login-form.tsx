@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -54,6 +54,24 @@ export function LoginForm() {
   const [isSmsVerified, setIsSmsVerified] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCountdown = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setSecondsLeft(60);
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(timerRef.current!);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
   const {
     register,
@@ -89,17 +107,7 @@ export function LoginForm() {
       return;
     }
 
-    // 이미 기기 등록된 경우 → 바로 로그인
-    if (hasDeviceRegistered(data.companyCode, data.phoneNumber)) {
-      completeLogin({
-        companyCode: data.companyCode,
-        phoneNumber: data.phoneNumber,
-        userData: result.data,
-      });
-      return;
-    }
-
-    // 최초 로그인 → SMS OTP 단계로
+    // 매 로그인마다 SMS OTP 인증
     const pending: PendingAuthContext = {
       companyCode: data.companyCode,
       phoneNumber: data.phoneNumber,
@@ -117,6 +125,7 @@ export function LoginForm() {
       return;
     }
     setIsCodeSent(true);
+    startCountdown();
   };
 
   const handleResendSmsCode = async () => {
@@ -132,6 +141,7 @@ export function LoginForm() {
     setSmsCode("");
     setIsSmsVerified(false);
     setIsCodeSent(true);
+    startCountdown();
   };
 
   const handleVerifySmsCode = async () => {
@@ -264,6 +274,19 @@ export function LoginForm() {
             </Button>
           </div>
 
+          {!isSmsVerified && secondsLeft > 0 && (
+            <p className="text-xs text-gray-500 text-center">
+              인증번호 유효시간{" "}
+              <span className={secondsLeft <= 10 ? "text-red-500 font-semibold" : "text-blue-600 font-semibold"}>
+                {secondsLeft}초
+              </span>
+            </p>
+          )}
+          {!isSmsVerified && secondsLeft === 0 && isCodeSent && (
+            <p className="text-xs text-red-500 text-center font-semibold">
+              인증번호가 만료되었습니다. 재발송해주세요.
+            </p>
+          )}
           {isSmsVerified && (
             <div className="flex items-center gap-2 text-xs text-green-700">
               <ShieldCheck className="w-4 h-4" />

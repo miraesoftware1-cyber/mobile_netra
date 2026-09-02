@@ -36,7 +36,7 @@ export default function MainLayout({
       try {
         const params = new URLSearchParams({ companyCode, userId, userType });
         const r = await fetch(`/api/menu-visibility?${params.toString()}`);
-        const data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean }> } = await r.json();
+        const data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean; approve: boolean }> } = await r.json();
         if (Array.isArray(data.items)) setItems(data.items);
         if (data.perms) setPerms(data.perms);
       } catch { /* 무시 */ }

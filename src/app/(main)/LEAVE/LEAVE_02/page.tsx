@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, CalendarCheck } from "lucide-react";
-import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
-import { isDepartmentLeader } from "@/features/auth/lib/is-department-leader";
+import { useRouter } from "next/navigation";
+import { useMenuStore } from "@/features/menu/use-menu-store";
 import { LeaveApprovalList } from "@/features/leave/components/leave-approval-list";
 
 export default function LeaveApprovalPage() {
   const router = useRouter();
-  const leaderFlag = useAuthStore((s) => s.user?.leader_flag);
+  const items = useMenuStore((s) => s.items);
+  const perms = useMenuStore((s) => s.perms);
 
-  useEffect(() => {
-    if (!isDepartmentLeader(leaderFlag)) {
-      router.replace("/menu");
-    }
-  }, [leaderFlag, router]);
+  // 이 메뉴의 menu_id 찾기 (menu_exec 기준)
+  const menuId = items.find((m) =>
+    m.menu_exec?.replace(/^\//, "").toLowerCase() === "leave/leave_02",
+  )?.menu_id;
+
+  const canApprove = menuId ? (perms[menuId]?.approve ?? false) : false;
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">
@@ -31,7 +31,7 @@ export default function LeaveApprovalPage() {
         </div>
       </header>
       <div className="flex-1 flex flex-col min-h-0">
-        <LeaveApprovalList />
+        <LeaveApprovalList canApprove={canApprove} />
       </div>
     </div>
   );

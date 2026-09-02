@@ -336,6 +336,9 @@ export function LeaveRequestForm() {
     const result = await submitLeaveRequest({
       companyCode: user.companyCode,
       emp_code: user.emp_code,
+      emp_name: user.emp_name,
+      corp_code: user.corp_code,
+      dpt_code: user.dpt_code,
       year: CURRENT_YEAR,
       leaveTypeCode: data.leaveTypeCode,
       appliedDate: toDateParam(TODAY),

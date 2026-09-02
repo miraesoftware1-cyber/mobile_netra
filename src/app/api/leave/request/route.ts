@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
 
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
+import { sendPushNotification } from '@/lib/push/send-push';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 const requestSchema = z.object({
   companyCode: z.string().min(1),
   emp_code: z.string().min(1),
+  emp_name: z.string().default(''),
+  corp_code: z.string().default(''),
+  dpt_code: z.string().default(''),
   year: z.string().regex(/^\d{4}$/),
   leaveTypeCode: z.string().min(1),
   appliedDate: z.string().regex(/^\d{8}$/),
@@ -34,6 +44,9 @@ export async function POST(request: NextRequest) {
   const {
     companyCode,
     emp_code,
+    emp_name,
+    corp_code,
+    dpt_code,
     year,
     leaveTypeCode,
     appliedDate,
@@ -106,6 +119,38 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  // 승인권자에게 푸시 알림 발송 (fire-and-forget)
+  void (async () => {
+    try {
+      const { data: subscribers } = await supabase
+        .from('push_subscriptions')
+        .select('subscription, manage_dpt_codes')
+        .eq('corp_code', corp_code);
+
+      if (!subscribers?.length) return;
+
+      const targets = subscribers.filter((row) =>
+        row.manage_dpt_codes
+          ?.split(',')
+          .map((c: string) => c.trim())
+          .includes(dpt_code),
+      );
+
+      await Promise.allSettled(
+        targets.map((row) =>
+          sendPushNotification(row.subscription, {
+            title: '연차 신청 알림',
+            body: `${emp_name || emp_code}님이 연차를 신청했습니다.`,
+            url: '/LEAVE/LEAVE_02',
+            tag: 'leave-request',
+          }),
+        ),
+      );
+    } catch (err) {
+      console.error('[leave/request] 푸시 발송 실패:', err);
+    }
+  })();
 
   return NextResponse.json({ success: true, message: insertData.MSG });
 }

@@ -18,8 +18,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { usePushSubscription } from "@/features/push/use-push-subscription";
 import { useMenuStore } from "@/features/menu/use-menu-store";
-import { isDepartmentLeader } from "@/features/auth/lib/is-department-leader";
 import type { MenuDBItem } from "@/app/api/menu-visibility/route";
 
 // ─── 아이콘 매핑 (DB menu_id 기준) ──────────────────────────────────────────
@@ -61,8 +61,6 @@ const PARENT_LABEL_MAP: Record<string, string> = {
   SCH:   "일정관리",
 };
 
-// 부서장(leader_flag)만 볼 수 있는 메뉴 ID
-const LEADER_ONLY_MENU_IDS = new Set(["LEAVE_02", "LEAVE_04"]);
 
 function groupIcon(menuId: string): LucideIcon {
   return GROUP_ICON_MAP[menuId] ?? LayoutGrid;
@@ -85,7 +83,7 @@ export default function MenuPage() {
   const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
   const userId      = useAuthStore((s) => s.user?.user_id ?? "");
   const userType    = useAuthStore((s) => s.user?.user_type ?? "");
-  const leaderFlag  = useAuthStore((s) => s.user?.leader_flag);
+  usePushSubscription();
   const companyName = useAuthStore((s) => s.user?.corp_name);
 
   // 스토어에서 직접 읽어 layout의 visibilitychange 업데이트에 반응
@@ -106,7 +104,7 @@ export default function MenuPage() {
     const params = new URLSearchParams({ companyCode, userId, userType });
     fetch(`/api/menu-visibility?${params.toString()}`)
       .then((r) => r.json())
-      .then((data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean }> }) => {
+      .then((data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean; approve: boolean }> }) => {
         const arr = Array.isArray(data.items) ? data.items : [];
         setMenuStoreItems(arr);
         if (data.perms) setMenuStorePerms(data.perms);
@@ -137,11 +135,8 @@ export default function MenuPage() {
   const sections = useMemo((): Section[] => {
     if (!dbLoaded) return [];
 
-    const leader = isDepartmentLeader(leaderFlag);
-
-    // 소메뉴: 리더 전용 + 명시적 view=false 체크
+    // 소메뉴: DB 권한(per_ret) 기준으로만 체크
     const canView = (menuId: string) => {
-      if (LEADER_ONLY_MENU_IDS.has(menuId) && !leader) return false;
       const perm = storePerms[menuId];
       return !perm || perm.view;
     };
@@ -152,6 +147,7 @@ export default function MenuPage() {
     };
 
     const dbItems = storeItems;
+    console.log('[menu-debug] dbItems:', dbItems.map(m => m.menu_id), 'perms:', Object.keys(storePerms));
     if (dbItems.length === 0) return [];
 
     const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";
@@ -213,7 +209,7 @@ export default function MenuPage() {
           })),
       }))
       .filter((s) => s.items.length > 0);
-  }, [storeItems, storePerms, dbLoaded, leaderFlag]);
+  }, [storeItems, storePerms, dbLoaded]);
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -246,7 +242,7 @@ export default function MenuPage() {
           )}
           {sections.map((section) => {
             const GroupIcon = section.groupIcon;
-            const collapsed = collapsedGroups[section.key] ?? true;
+            const collapsed = collapsedGroups[section.key] ?? false;
             return (
               <section key={section.key} className="flex flex-col gap-3 first:mt-0 mt-3">
                 <button

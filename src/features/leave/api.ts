@@ -189,6 +189,9 @@ export async function fetchHolidayTypes(
 export interface LeaveRequestPayload {
   companyCode: string;
   emp_code: string;
+  emp_name?: string;
+  corp_code?: string;
+  dpt_code?: string;
   year: string;
   leaveTypeCode: string;
   appliedDate: string;
