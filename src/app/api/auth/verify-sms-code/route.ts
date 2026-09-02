@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { phoneNumber, code } = parsed.data;
-  const result = validateSmsCode(phoneNumber, code);
+  const result = await validateSmsCode(phoneNumber, code);
 
   if (!result.success) {
     const message =

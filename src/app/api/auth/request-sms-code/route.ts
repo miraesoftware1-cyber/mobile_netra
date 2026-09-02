@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const code = issueSmsCode(phoneNumber);
+  const code = await issueSmsCode(phoneNumber);
 
   try {
     await sendSms(phoneNumber, `[Netra] 인증번호: ${code}`);

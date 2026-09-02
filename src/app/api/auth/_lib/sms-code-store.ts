@@ -5,25 +5,11 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
-interface SmsCodeRecord {
-  code: string;
-  expiresAt: number;
-}
-
-const TTL_MS = 60 * 1000;
+const TTL_MS = 60 * 1000; // 1분
 const RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000; // 2시간
 const RATE_LIMIT_MAX = 3;
 
-// OTP 코드는 1분 TTL이라 인메모리로 충분
-const SMS_CODE_STORE = new Map<string, SmsCodeRecord>();
-
-function cleanupCodes(now: number) {
-  for (const [key, record] of SMS_CODE_STORE.entries()) {
-    if (record.expiresAt <= now) SMS_CODE_STORE.delete(key);
-  }
-}
-
-// Rate limit은 Supabase에 영구 저장 (서버 재시작 시에도 유지)
+// Rate limit: Supabase 영구 저장
 export async function checkRateLimit(
   phoneNumber: string,
 ): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
@@ -63,25 +49,42 @@ export async function checkRateLimit(
   }
 }
 
-export function issueSmsCode(phoneNumber: string): string {
-  const now = Date.now();
-  cleanupCodes(now);
+// OTP 코드: Supabase 저장 (서버리스 환경에서 인스턴스 간 공유)
+export async function issueSmsCode(phoneNumber: string): Promise<string> {
   const code = String(Math.floor(Math.random() * 900000) + 100000);
-  SMS_CODE_STORE.set(phoneNumber, { code, expiresAt: now + TTL_MS });
+  const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
+
+  await supabase.from("sms_otp_codes").upsert(
+    { phone_number: phoneNumber, code, expires_at: expiresAt },
+    { onConflict: "phone_number" },
+  );
+
   return code;
 }
 
-export function validateSmsCode(
+export async function validateSmsCode(
   phoneNumber: string,
   code: string,
-): { success: true } | { success: false; reason: "expired" | "mismatch" } {
-  const now = Date.now();
-  cleanupCodes(now);
+): Promise<{ success: true } | { success: false; reason: "expired" | "mismatch" }> {
+  try {
+    const { data } = await supabase
+      .from("sms_otp_codes")
+      .select("code, expires_at")
+      .eq("phone_number", phoneNumber)
+      .single();
 
-  const record = SMS_CODE_STORE.get(phoneNumber);
-  if (!record) return { success: false, reason: "expired" };
-  if (record.code !== code) return { success: false, reason: "mismatch" };
+    if (!data || new Date(data.expires_at) < new Date()) {
+      await supabase.from("sms_otp_codes").delete().eq("phone_number", phoneNumber);
+      return { success: false, reason: "expired" };
+    }
 
-  SMS_CODE_STORE.delete(phoneNumber);
-  return { success: true };
+    if (data.code !== code) {
+      return { success: false, reason: "mismatch" };
+    }
+
+    await supabase.from("sms_otp_codes").delete().eq("phone_number", phoneNumber);
+    return { success: true };
+  } catch {
+    return { success: false, reason: "expired" };
+  }
 }
