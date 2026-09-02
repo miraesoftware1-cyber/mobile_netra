@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     console.log('[leave/request] 발송 대상:', targets.length);
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       targets.map((row) =>
         sendPushNotification(row.subscription, {
           title: '연차 신청 알림',
@@ -144,6 +144,10 @@ export async function POST(request: NextRequest) {
         }),
       ),
     );
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') console.error(`[leave/request] 푸시 실패[${i}]:`, r.reason);
+      else console.log(`[leave/request] 푸시 성공[${i}]`);
+    });
   } catch (err) {
     console.error('[leave/request] 푸시 발송 실패:', err);
   }
