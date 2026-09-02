@@ -54,11 +54,17 @@ export async function issueSmsCode(phoneNumber: string): Promise<string> {
   const code = String(Math.floor(Math.random() * 900000) + 100000);
   const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
 
-  await supabase.from("sms_otp_codes").upsert(
+  const { error } = await supabase.from("sms_otp_codes").upsert(
     { phone_number: phoneNumber, code, expires_at: expiresAt },
     { onConflict: "phone_number" },
   );
 
+  if (error) {
+    console.error("[issueSmsCode] Supabase upsert 실패:", JSON.stringify(error));
+    throw new Error(`OTP 저장 실패: ${error.message}`);
+  }
+
+  console.log("[issueSmsCode] OTP 저장 완료:", phoneNumber);
   return code;
 }
 
@@ -67,11 +73,15 @@ export async function validateSmsCode(
   code: string,
 ): Promise<{ success: true } | { success: false; reason: "expired" | "mismatch" }> {
   try {
-    const { data } = await supabase
+    const { data, error: selectError } = await supabase
       .from("sms_otp_codes")
       .select("code, expires_at")
       .eq("phone_number", phoneNumber)
       .single();
+
+    if (selectError) {
+      console.error("[validateSmsCode] Supabase select 실패:", JSON.stringify(selectError));
+    }
 
     if (!data || new Date(data.expires_at) < new Date()) {
       await supabase.from("sms_otp_codes").delete().eq("phone_number", phoneNumber);
