@@ -18,7 +18,7 @@ export function usePushSubscription() {
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
-    if (!user || user.leader_flag?.toUpperCase() !== "Y") return;
+    if (!user || !user.manage_dpt_codes?.trim()) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
     (async () => {
