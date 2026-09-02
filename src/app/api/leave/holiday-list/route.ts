@@ -21,6 +21,8 @@ interface HolidayListApiItem {
   year_edate: string;
   app_status: string;
   year_chk?: string;
+  year_seq?: number;
+  year_st?: string;
 }
 
 interface HolidayListApiResponse {

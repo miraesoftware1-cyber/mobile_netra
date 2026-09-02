@@ -420,7 +420,7 @@ export function LeaveRequestForm() {
       </div>
 
       {/* ── 스크롤 가능 영역: 구분 ~ 비고 (하단 fixed 버튼 높이만큼 여백) ── */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 pb-24">
         {/* 구분 */}
         <FieldRow label="구분" error={errors.leaveTypeCode?.message}>
           <Controller
@@ -548,9 +548,8 @@ export function LeaveRequestForm() {
       {/* ── 뷰포트 하단 고정: 버튼 (flex 레이아웃과 무관하게 항상 보이도록) ── */}
       <div
         className={cn(
-          "fixed bottom-0 left-1/2 z-40 flex w-full max-w-[430px] -translate-x-1/2 gap-3",
-          "border-t border-gray-100 bg-white px-4 pt-4",
-          "pb-[calc(1rem+env(safe-area-inset-bottom,0px))]",
+          "fixed bottom-16 left-1/2 z-40 flex w-full max-w-[430px] -translate-x-1/2 gap-3",
+          "border-t border-gray-100 bg-white px-4 pt-4 pb-4",
         )}
       >
         <Button

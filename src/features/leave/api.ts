@@ -281,6 +281,8 @@ export interface HolidayListItem {
   year_edate: string;
   app_status: string;
   year_chk?: string;
+  year_seq?: number;
+  year_st?: string;
 }
 
 export interface DepartmentHolidayListItem {
@@ -300,6 +302,31 @@ type DepartmentHolidayListResult =
 type HolidayListResult =
   | { success: true; items: HolidayListItem[]; emptyMessage?: string }
   | { success: false; error: string };
+
+type CancelLeaveResult =
+  | { success: true; message: string }
+  | { success: false; error: string };
+
+export async function cancelLeave(
+  companyCode: string,
+  emp_code: string,
+  year: string,
+  year_seq: number,
+): Promise<CancelLeaveResult> {
+  const res = await fetch('/api/leave/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyCode, emp_code, year, year_seq }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: '취소 처리 중 오류가 발생했습니다.' }));
+    return { success: false, error: (errorData as ApiErrorResponse).error };
+  }
+
+  const data: { success: boolean; message: string } = await res.json();
+  return { success: true, message: data.message };
+}
 
 export async function fetchHolidayList(
   companyCode: string,
