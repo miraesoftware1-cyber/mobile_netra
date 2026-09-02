@@ -121,7 +121,7 @@ export function LeaveInquiryView() {
       ),
     onSuccess: (result) => {
       if (!result.success) {
-        setCancelError(result.error);
+        setCancelError((result as { success: false; error: string }).error);
         return;
       }
       setCancelTarget(null);
