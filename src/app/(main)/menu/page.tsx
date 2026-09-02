@@ -147,7 +147,6 @@ export default function MenuPage() {
     };
 
     const dbItems = storeItems;
-    console.log('[menu-debug] dbItems:', dbItems.map(m => m.menu_id), 'perms:', Object.keys(storePerms));
     if (dbItems.length === 0) return [];
 
     const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";

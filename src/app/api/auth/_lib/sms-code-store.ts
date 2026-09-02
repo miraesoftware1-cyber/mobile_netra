@@ -27,38 +27,40 @@ function cleanupCodes(now: number) {
 export async function checkRateLimit(
   phoneNumber: string,
 ): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
-  const now = new Date();
-  const windowStart = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
+  try {
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
 
-  // 현재 레코드 조회
-  const { data } = await supabase
-    .from("sms_rate_limits")
-    .select("attempts, window_start")
-    .eq("phone_number", phoneNumber)
-    .single();
+    const { data } = await supabase
+      .from("sms_rate_limits")
+      .select("attempts, window_start")
+      .eq("phone_number", phoneNumber)
+      .single();
 
-  if (!data || new Date(data.window_start) < windowStart) {
-    // 윈도우 밖이거나 첫 시도 → 새 윈도우로 upsert
-    await supabase.from("sms_rate_limits").upsert(
-      { phone_number: phoneNumber, attempts: 1, window_start: now.toISOString() },
-      { onConflict: "phone_number" },
-    );
+    if (!data || new Date(data.window_start) < windowStart) {
+      await supabase.from("sms_rate_limits").upsert(
+        { phone_number: phoneNumber, attempts: 1, window_start: now.toISOString() },
+        { onConflict: "phone_number" },
+      );
+      return { allowed: true };
+    }
+
+    if (data.attempts >= RATE_LIMIT_MAX) {
+      const windowExpiry = new Date(data.window_start).getTime() + RATE_LIMIT_WINDOW_MS;
+      const retryAfterSeconds = Math.ceil((windowExpiry - now.getTime()) / 1000);
+      return { allowed: false, retryAfterSeconds };
+    }
+
+    await supabase
+      .from("sms_rate_limits")
+      .update({ attempts: data.attempts + 1 })
+      .eq("phone_number", phoneNumber);
+
+    return { allowed: true };
+  } catch (err) {
+    console.error("[rate-limit] Supabase 오류, 통과 허용:", err);
     return { allowed: true };
   }
-
-  if (data.attempts >= RATE_LIMIT_MAX) {
-    const windowExpiry = new Date(data.window_start).getTime() + RATE_LIMIT_WINDOW_MS;
-    const retryAfterSeconds = Math.ceil((windowExpiry - now.getTime()) / 1000);
-    return { allowed: false, retryAfterSeconds };
-  }
-
-  // 횟수 증가
-  await supabase
-    .from("sms_rate_limits")
-    .update({ attempts: data.attempts + 1 })
-    .eq("phone_number", phoneNumber);
-
-  return { allowed: true };
 }
 
 export function issueSmsCode(phoneNumber: string): string {
