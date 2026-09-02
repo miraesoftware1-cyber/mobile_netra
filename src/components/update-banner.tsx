@@ -23,7 +23,10 @@ export function UpdateBanner() {
           <p className="text-sm text-gray-500 mt-1">새로운 버전이 배포되었습니다.<br />새로고침 후 계속 이용하실 수 있습니다.</p>
         </div>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            try { sessionStorage.removeItem("app-initial-build-id"); } catch { /* 무시 */ }
+            window.location.reload();
+          }}
           className="w-full h-12 bg-primary text-white text-sm font-semibold rounded-xl active:bg-primary/90"
         >
           새로고침
