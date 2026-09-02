@@ -56,7 +56,7 @@ function rowToPerm(raw: Record<string, unknown>): MenuPerm {
     add: yn(r.per_ins),
     edit: yn(r.per_mod),
     del: yn(r.per_del),
-    approve: "per_apv" in r ? yn(r.per_apv) : (yn(r.per_ins) || yn(r.per_mod) || yn(r.per_del)),
+    approve: yn(r.per_apv),
   };
 }
 
