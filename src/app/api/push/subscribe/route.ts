@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { query } from "@/lib/db/postgres";
 
 const schema = z.object({
   subscription: z.object({
@@ -26,26 +21,20 @@ export async function POST(request: NextRequest) {
 
   const { subscription, emp_code, corp_code, manage_dpt_codes } = parsed.data;
 
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      emp_code,
-      corp_code,
-      manage_dpt_codes,
-      subscription,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "emp_code,subscription_endpoint", ignoreDuplicates: false },
-  );
-
-  if (error) {
-    // upsert 실패 시 insert 시도 (컬럼 문제 대비)
-    const { error: insertError } = await supabase.from("push_subscriptions").upsert(
-      { emp_code, corp_code, manage_dpt_codes, subscription, updated_at: new Date().toISOString() },
+  try {
+    await query(
+      `INSERT INTO netra_push_subscriptions (emp_code, corp_code, manage_dpt_codes, subscription, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (emp_code) DO UPDATE SET
+         corp_code = $2,
+         manage_dpt_codes = $3,
+         subscription = $4,
+         updated_at = NOW()`,
+      [emp_code, corp_code, manage_dpt_codes, JSON.stringify(subscription)],
     );
-    if (insertError) {
-      console.error("[push/subscribe] DB 저장 실패:", insertError);
-      return NextResponse.json({ error: "구독 저장에 실패했습니다." }, { status: 500 });
-    }
+  } catch (err) {
+    console.error("[push/subscribe] DB 저장 실패:", err);
+    return NextResponse.json({ error: "구독 저장에 실패했습니다." }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

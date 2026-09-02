@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@supabase/supabase-js';
 
+import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { query } from '@/lib/db/postgres';
 
 const requestSchema = z.object({
   companyCode: z.string().min(1),
@@ -123,12 +119,12 @@ export async function POST(request: NextRequest) {
   // 승인권자에게 푸시 알림 발송 (fire-and-forget)
   void (async () => {
     try {
-      const { data: subscribers } = await supabase
-        .from('push_subscriptions')
-        .select('subscription, manage_dpt_codes')
-        .eq('corp_code', corp_code);
+      const { rows: subscribers } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string }>(
+        `SELECT subscription, manage_dpt_codes FROM netra_push_subscriptions WHERE corp_code = $1`,
+        [corp_code],
+      );
 
-      if (!subscribers?.length) return;
+      if (!subscribers.length) return;
 
       const targets = subscribers.filter((row) =>
         row.manage_dpt_codes
