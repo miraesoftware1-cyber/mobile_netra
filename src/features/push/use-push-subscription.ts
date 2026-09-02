@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { useMenuStore } from "@/features/menu/use-menu-store";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -16,9 +17,11 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 
 export function usePushSubscription() {
   const user = useAuthStore((s) => s.user);
+  const perms = useMenuStore((s) => s.perms);
+  const canApprove = perms["LEAVE_02"]?.approve ?? false;
 
   useEffect(() => {
-    if (!user || !user.manage_dpt_codes?.trim()) return;
+    if (!user || !canApprove) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
     (async () => {
@@ -51,5 +54,5 @@ export function usePushSubscription() {
         console.error("[push] 구독 등록 실패:", err);
       }
     })();
-  }, [user]);
+  }, [user, canApprove]);
 }

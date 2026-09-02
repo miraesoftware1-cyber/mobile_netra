@@ -10,6 +10,8 @@ export default function LeaveApprovalPage() {
   const perms = useMenuStore((s) => s.perms);
 
   const canApprove = perms["LEAVE_02"]?.approve ?? false;
+  // 디버그: 콘솔에서 perms 확인
+  if (typeof window !== "undefined") console.log("[LEAVE_02] perms:", perms, "canApprove:", canApprove);
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">
