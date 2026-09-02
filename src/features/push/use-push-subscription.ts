@@ -32,13 +32,13 @@ export function usePushSubscription() {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") return;
 
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-          });
-        }
+        // 기존 구독 해제 후 새 키로 재구독 (VAPID 키 변경 대응)
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) await existing.unsubscribe();
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
 
         await fetch("/api/push/subscribe", {
           method: "POST",
