@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 
 import webpush from 'web-push';
@@ -116,8 +117,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 승인권자에게 푸시 알림 발송 (fire-and-forget)
-  void (async () => {
+  // 승인권자에게 푸시 알림 발송
+  waitUntil((async () => {
     try {
       const { rows: subscribers } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string }>(
         `SELECT subscription, manage_dpt_codes FROM netra_push_subscriptions WHERE corp_code = $1`,
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error('[leave/request] 푸시 발송 실패:', err);
     }
-  })();
+  })());
 
   return NextResponse.json({ success: true, message: insertData.MSG });
 }
