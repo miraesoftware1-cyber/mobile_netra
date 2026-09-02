@@ -7,15 +7,9 @@ import { LeaveApprovalList } from "@/features/leave/components/leave-approval-li
 
 export default function LeaveApprovalPage() {
   const router = useRouter();
-  const items = useMenuStore((s) => s.items);
   const perms = useMenuStore((s) => s.perms);
 
-  // 이 메뉴의 menu_id 찾기 (menu_exec 기준)
-  const menuId = items.find((m) =>
-    m.menu_exec?.replace(/^\//, "").toLowerCase() === "leave/leave_02",
-  )?.menu_id;
-
-  const canApprove = menuId ? (perms[menuId]?.approve ?? false) : false;
+  const canApprove = perms["LEAVE_02"]?.approve ?? false;
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">
