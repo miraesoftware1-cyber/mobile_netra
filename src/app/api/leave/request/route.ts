@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 
 import webpush from 'web-push';
@@ -118,36 +117,36 @@ export async function POST(request: NextRequest) {
   }
 
   // 승인권자에게 푸시 알림 발송
-  waitUntil((async () => {
-    try {
-      const { rows: subscribers } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string }>(
-        `SELECT subscription, manage_dpt_codes FROM netra_push_subscriptions WHERE corp_code = $1`,
-        [corp_code],
-      );
+  try {
+    const { rows: subscribers } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string }>(
+      `SELECT subscription, manage_dpt_codes FROM netra_push_subscriptions WHERE corp_code = $1`,
+      [corp_code],
+    );
 
-      if (!subscribers.length) return;
+    console.log('[leave/request] 구독자 수:', subscribers.length, 'corp_code:', corp_code, 'dpt_code:', dpt_code);
 
-      const targets = subscribers.filter((row) =>
-        row.manage_dpt_codes
-          ?.split(',')
-          .map((c: string) => c.trim())
-          .includes(dpt_code),
-      );
+    const targets = subscribers.filter((row) =>
+      row.manage_dpt_codes
+        ?.split(',')
+        .map((c: string) => c.trim())
+        .includes(dpt_code),
+    );
 
-      await Promise.allSettled(
-        targets.map((row) =>
-          sendPushNotification(row.subscription, {
-            title: '연차 신청 알림',
-            body: `${emp_name || emp_code}님이 연차를 신청했습니다.`,
-            url: '/LEAVE/LEAVE_02',
-            tag: 'leave-request',
-          }),
-        ),
-      );
-    } catch (err) {
-      console.error('[leave/request] 푸시 발송 실패:', err);
-    }
-  })());
+    console.log('[leave/request] 발송 대상:', targets.length);
+
+    await Promise.allSettled(
+      targets.map((row) =>
+        sendPushNotification(row.subscription, {
+          title: '연차 신청 알림',
+          body: `${emp_name || emp_code}님이 연차를 신청했습니다.`,
+          url: '/LEAVE/LEAVE_02',
+          tag: 'leave-request',
+        }),
+      ),
+    );
+  } catch (err) {
+    console.error('[leave/request] 푸시 발송 실패:', err);
+  }
 
   return NextResponse.json({ success: true, message: insertData.MSG });
 }
