@@ -3,20 +3,25 @@ import { useEffect, useRef, useState } from "react";
 const POLL_MS = 5 * 60 * 1000; // 5분 (백그라운드 폴링)
 const VISIBILITY_DEBOUNCE_MS = 5 * 1000; // 5초 (포그라운드 전환 시 최소 간격)
 
+const SESSION_KEY = "app-initial-build-id";
+
 export function useUpdateChecker() {
-  const initialId = useRef<string | null>(null);
+  const initialId = useRef<string | null>(
+    typeof sessionStorage !== "undefined" ? sessionStorage.getItem(SESSION_KEY) : null,
+  );
   const lastCheck = useRef(0);
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
   useEffect(() => {
     async function check() {
       try {
-        const res = await fetch("/api/build-id", { cache: "no-store" });
+        const res = await fetch(`/api/build-id?t=${Date.now()}`, { cache: "no-store" });
         if (!res.ok) return;
         const { buildId } = await res.json() as { buildId: string };
         lastCheck.current = Date.now();
         if (!initialId.current) {
           initialId.current = buildId;
+          try { sessionStorage.setItem(SESSION_KEY, buildId); } catch { /* 무시 */ }
         } else if (buildId !== initialId.current) {
           setUpdateAvailable(true);
         }
