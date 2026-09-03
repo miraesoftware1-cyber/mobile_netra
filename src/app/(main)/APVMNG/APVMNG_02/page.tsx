@@ -105,7 +105,7 @@ function EmpPicker({
   const selectedCodes = new Set(selected.map((m) => m.empCode));
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end" onClick={onClose}>
       <div
         className="bg-white w-full rounded-t-2xl max-h-[70vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -176,7 +176,7 @@ function MsgPopup({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end" onClick={onClose}>
       <div
         className="bg-white w-full rounded-t-2xl max-h-[88vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}

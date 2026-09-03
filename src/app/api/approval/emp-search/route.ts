@@ -26,7 +26,11 @@ export async function GET(request: NextRequest) {
   if (!res?.ok) return NextResponse.json({ items: [] });
 
   const data = await res.json().catch(() => null);
-  if (String(data?.Flag) !== '0') return NextResponse.json({ items: [] });
+  if (!data) return NextResponse.json({ items: [] });
+
+  // Flag 컬럼 없는 SP도 허용 (R2JsonProc이 rows를 items로 감쌀 때 Flag=undefined)
+  const flagOk = data.Flag === undefined || String(data.Flag) === '0';
+  if (!flagOk) return NextResponse.json({ items: [] });
 
   return NextResponse.json({
     items: (data.items ?? []) as { EMP_CODE: string; EMP_NAME: string; DPT_NAME: string }[],
