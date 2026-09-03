@@ -9,13 +9,17 @@
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_PROCESS' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_PROCESS (
-        PROC_ID     INT             IDENTITY(1,1)   NOT NULL,
-        MENU_ID     NVARCHAR(50)                    NOT NULL,
-        PROC_NAME   NVARCHAR(100)                   NULL,
-        CONFIG_JSON NVARCHAR(MAX)                   NOT NULL,  -- 절차 설정 JSON 문자열
-        USE_YN      CHAR(1)                         NOT NULL   DEFAULT 'Y',
-        REG_DT      DATETIME                        NOT NULL   DEFAULT GETDATE(),
-        UPD_DT      DATETIME                        NULL,
+        PROC_ID           INT             IDENTITY(1,1)   NOT NULL,
+        MENU_ID           NVARCHAR(50)                    NOT NULL,
+        PROC_NAME         NVARCHAR(100)                   NULL,
+        CONFIG_JSON       NVARCHAR(MAX)                   NOT NULL,
+        USE_YN            CHAR(1)                         NOT NULL   DEFAULT 'Y',
+        REG_DT            DATETIME                        NOT NULL   DEFAULT GETDATE(),
+        UPD_DT            DATETIME                        NULL,
+        CREATION_DATE     VARCHAR(14)                     NULL,
+        CREATED_BY        VARCHAR(30)                     NULL,
+        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
+        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
         CONSTRAINT PK_APVMNG_PROCESS PRIMARY KEY (PROC_ID),
         CONSTRAINT UQ_APVMNG_PROCESS_MENU UNIQUE (MENU_ID)
     )
@@ -26,18 +30,22 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_REQUEST' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_REQUEST (
-        REQ_ID          INT             IDENTITY(1,1)   NOT NULL,
-        MENU_ID         NVARCHAR(50)                    NOT NULL,
-        REQ_EMP_CODE    NVARCHAR(50)                    NOT NULL,
-        REQ_EMP_NAME    NVARCHAR(100)                   NULL,
-        PAYLOAD_JSON    NVARCHAR(MAX)                   NOT NULL,  -- 요청 데이터 JSON
-        PROC_SNAPSHOT   NVARCHAR(MAX)                   NOT NULL,  -- 요청 시점 절차 설정 스냅샷
-        TOTAL_STEPS     INT                             NOT NULL   DEFAULT 1,
-        CURRENT_STEP    INT                             NOT NULL   DEFAULT 1,
-        STATUS          NVARCHAR(20)                    NOT NULL   DEFAULT 'PENDING',
+        REQ_ID            INT             IDENTITY(1,1)   NOT NULL,
+        MENU_ID           NVARCHAR(50)                    NOT NULL,
+        REQ_EMP_CODE      NVARCHAR(50)                    NOT NULL,
+        REQ_EMP_NAME      NVARCHAR(100)                   NULL,
+        PAYLOAD_JSON      NVARCHAR(MAX)                   NOT NULL,
+        PROC_SNAPSHOT     NVARCHAR(MAX)                   NOT NULL,
+        TOTAL_STEPS       INT                             NOT NULL   DEFAULT 1,
+        CURRENT_STEP      INT                             NOT NULL   DEFAULT 1,
+        STATUS            NVARCHAR(20)                    NOT NULL   DEFAULT 'PENDING',
         -- STATUS: PENDING(대기) / APPROVED(승인완료) / REJECTED(반려)
-        REG_DT          DATETIME                        NOT NULL   DEFAULT GETDATE(),
-        UPD_DT          DATETIME                        NULL,
+        REG_DT            DATETIME                        NOT NULL   DEFAULT GETDATE(),
+        UPD_DT            DATETIME                        NULL,
+        CREATION_DATE     VARCHAR(14)                     NULL,
+        CREATED_BY        VARCHAR(30)                     NULL,
+        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
+        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
         CONSTRAINT PK_APVMNG_REQUEST PRIMARY KEY (REQ_ID)
     )
 END
@@ -47,12 +55,16 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_STEP_APV' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_STEP_APV (
-        SA_ID       INT             IDENTITY(1,1)   NOT NULL,
-        REQ_ID      INT                             NOT NULL,
-        STEP_NO     INT                             NOT NULL,
-        APV_TYPE    NVARCHAR(20)                    NOT NULL,  -- INDIVIDUAL / GROUP / DEPT_HEAD
-        EMP_CODE    NVARCHAR(50)                    NOT NULL,  -- 실제 승인자 사번 (DEPT_HEAD는 앱에서 resolve 후 삽입)
-        THRESHOLD   INT                             NOT NULL   DEFAULT 1,
+        SA_ID             INT             IDENTITY(1,1)   NOT NULL,
+        REQ_ID            INT                             NOT NULL,
+        STEP_NO           INT                             NOT NULL,
+        APV_TYPE          NVARCHAR(20)                    NOT NULL,  -- INDIVIDUAL / GROUP / DEPT_HEAD
+        EMP_CODE          NVARCHAR(50)                    NOT NULL,
+        THRESHOLD         INT                             NOT NULL   DEFAULT 1,
+        CREATION_DATE     VARCHAR(14)                     NULL,
+        CREATED_BY        VARCHAR(30)                     NULL,
+        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
+        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
         CONSTRAINT PK_APVMNG_STEP_APV PRIMARY KEY (SA_ID),
         CONSTRAINT FK_APVMNG_SA_REQ FOREIGN KEY (REQ_ID) REFERENCES TB_MOBILE_APVMNG_REQUEST(REQ_ID)
     )
@@ -63,14 +75,18 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_ACTION' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_ACTION (
-        ACT_ID      INT             IDENTITY(1,1)   NOT NULL,
-        REQ_ID      INT                             NOT NULL,
-        STEP_NO     INT                             NOT NULL,
-        APV_CODE    NVARCHAR(50)                    NOT NULL,
-        APV_NAME    NVARCHAR(100)                   NULL,
-        ACTION      NVARCHAR(20)                    NOT NULL,  -- APPROVE / REJECT
-        COMMENT     NVARCHAR(500)                   NULL,
-        ACT_DT      DATETIME                        NOT NULL   DEFAULT GETDATE(),
+        ACT_ID            INT             IDENTITY(1,1)   NOT NULL,
+        REQ_ID            INT                             NOT NULL,
+        STEP_NO           INT                             NOT NULL,
+        APV_CODE          NVARCHAR(50)                    NOT NULL,
+        APV_NAME          NVARCHAR(100)                   NULL,
+        ACTION            NVARCHAR(20)                    NOT NULL,  -- APPROVE / REJECT
+        COMMENT           NVARCHAR(500)                   NULL,
+        ACT_DT            DATETIME                        NOT NULL   DEFAULT GETDATE(),
+        CREATION_DATE     VARCHAR(14)                     NULL,
+        CREATED_BY        VARCHAR(30)                     NULL,
+        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
+        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
         CONSTRAINT PK_APVMNG_ACTION PRIMARY KEY (ACT_ID),
         CONSTRAINT FK_APVMNG_ACT_REQ FOREIGN KEY (REQ_ID) REFERENCES TB_MOBILE_APVMNG_REQUEST(REQ_ID)
     )
