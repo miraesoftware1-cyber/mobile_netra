@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, CheckCircle2, Clock, X, Check, XCircle, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
@@ -55,7 +55,7 @@ function formatDate(iso: string): string {
   } catch { return iso; }
 }
 
-export default function ApprovalInboxPage() {
+function ApprovalInboxContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const companyCode = useAuthStore((s) => s.user?.companyCode ?? '');
@@ -388,5 +388,13 @@ export default function ApprovalInboxPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ApprovalInboxPage() {
+  return (
+    <Suspense>
+      <ApprovalInboxContent />
+    </Suspense>
   );
 }
