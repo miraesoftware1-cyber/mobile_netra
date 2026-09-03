@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
   let reqEmpCode = '';
   let reqEmpName = '';
   let menuName   = '';
+  let payloadJson: Record<string, unknown> = {};
   try {
     const infoParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_req_info', param1: String(reqId) });
     const infoRes = await fetch(`${baseUrl}/R2JsonProc.asp?${infoParams}`, { cache: 'no-store' }).catch(() => null);
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
     reqEmpCode = String(infoRow.REQ_EMP_CODE ?? '');
     reqEmpName = String(infoRow.REQ_EMP_NAME ?? '');
     menuName   = String(infoRow.MENU_ID ?? '');
+    try { payloadJson = JSON.parse(String(infoRow.PAYLOAD_JSON ?? '{}')); } catch { /* 무시 */ }
   } catch { /* 무시 */ }
 
   // 3. 다음 단계 승인자에게 푸시 (단계 넘어갔을 때)
@@ -114,7 +116,25 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 4. 최종 완료(승인/반려) → 요청자에게 푸시
+  // 4. 최종 승인 → LEAVE_01이면 ERP 연차 상태 업데이트
+  if (newStatus === 'APPROVED' && menuName === 'LEAVE_01') {
+    try {
+      const yearSeq  = Number(payloadJson._year_seq ?? 0);
+      const year     = String(payloadJson._year ?? '');
+      const empCodeForLeave = String(payloadJson._emp_code ?? reqEmpCode);
+      if (yearSeq > 0 && year && empCodeForLeave) {
+        const today = new Date();
+        const pCdate = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+        await fetch(`${baseUrl}/R2JsonProc_update_holiday.asp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ detail: [{ p_emp_code: empCodeForLeave, p_year: year, p_seq: yearSeq, p_cdate: pCdate }] }),
+        }).catch(() => null);
+      }
+    } catch { /* 무시 */ }
+  }
+
+  // 5. 최종 완료(승인/반려) → 요청자에게 푸시
   if ((newStatus === 'APPROVED' || newStatus === 'REJECTED') && reqEmpCode) {
     const isApproved = newStatus === 'APPROVED';
     await pushToEmps(

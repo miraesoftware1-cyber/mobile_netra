@@ -116,10 +116,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const yearSeq: number = Number((insertData.items as Array<Record<string, unknown>>)?.[0]?.YEAR_SEQ ?? 0);
+
   // 승인 절차 및 푸시는 응답과 무관하게 백그라운드로 처리
   runApprovalFlow({
     baseUrl, corp_code, dpt_code, emp_code, emp_name,
-    leaveTypeCode, startDate, endDate, usedDays, reason, note,
+    leaveTypeCode, startDate, endDate, usedDays, reason, note, yearSeq,
   }).catch((err) => console.error('[leave/request] approval flow 실패:', err));
 
   return NextResponse.json({ success: true, message: insertData.MSG });
@@ -127,12 +129,12 @@ export async function POST(request: NextRequest) {
 
 async function runApprovalFlow({
   baseUrl, corp_code, dpt_code, emp_code, emp_name,
-  leaveTypeCode, startDate, endDate, usedDays, reason, note,
+  leaveTypeCode, startDate, endDate, usedDays, reason, note, yearSeq,
 }: {
   baseUrl: string; corp_code: string; dpt_code: string;
   emp_code: string; emp_name: string; leaveTypeCode: string;
   startDate: string; endDate: string; usedDays: number;
-  reason: string; note: string;
+  reason: string; note: string; yearSeq: number;
 }) {
   // 1. 승인 절차 설정 조회
   const procParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' });
@@ -195,6 +197,9 @@ async function runApprovalFlow({
     종료일: endDate,
     일수: `${usedDays}일`,
     사유: reason || note,
+    _year: startDate.slice(0, 4),
+    _year_seq: yearSeq,
+    _emp_code: emp_code,
   };
 
   const createParams = new URLSearchParams({
