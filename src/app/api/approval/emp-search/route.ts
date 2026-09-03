@@ -17,20 +17,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   }
 
-  // R2JsonProc.asp는 빈값 param을 차단 → keyword 없으면 전체 목록 SP 사용
+  // keyword 없으면 전체 목록 SP (param1='' 형태로 R2JsonProc 호환)
   const params = keyword.trim()
     ? new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_search', param1: keyword })
-    : new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_list' });
+    : new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_list', param1: '' });
 
-  const res = await fetch(`${resolved.baseUrl}/R2JsonProc.asp?${params}`, { cache: 'no-store' }).catch(() => null);
-  if (!res?.ok) return NextResponse.json({ items: [] });
+  const url = `${resolved.baseUrl}/R2JsonProc.asp?${params}`;
+  const res = await fetch(url, { cache: 'no-store' }).catch(() => null);
+  if (!res?.ok) {
+    console.error('[emp-search] HTTP error', res?.status, url);
+    return NextResponse.json({ items: [] });
+  }
 
   const data = await res.json().catch(() => null);
+  console.log('[emp-search] raw response:', JSON.stringify(data)?.slice(0, 300));
   if (!data) return NextResponse.json({ items: [] });
 
   // Flag 컬럼 없는 SP도 허용 (R2JsonProc이 rows를 items로 감쌀 때 Flag=undefined)
   const flagOk = data.Flag === undefined || String(data.Flag) === '0';
-  if (!flagOk) return NextResponse.json({ items: [] });
+  if (!flagOk) {
+    console.error('[emp-search] bad Flag:', data.Flag, data.MSG);
+    return NextResponse.json({ items: [] });
+  }
 
   return NextResponse.json({
     items: (data.items ?? []) as { EMP_CODE: string; EMP_NAME: string; DPT_NAME: string }[],
