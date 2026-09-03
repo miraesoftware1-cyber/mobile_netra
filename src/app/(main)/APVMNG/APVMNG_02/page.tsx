@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Settings, Plus, Trash2, X, ChevronDown,
@@ -83,35 +83,38 @@ function EmpPicker({
   onClose: () => void;
 }) {
   const [keyword, setKeyword] = useState('');
-  const [results, setResults] = useState<EmpRow[]>([]);
+  const [allEmps, setAllEmps] = useState<EmpRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function search(kw: string) {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!kw.trim()) { setResults([]); return; }
-    timerRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/approval/emp-search?companyCode=${companyCode}&keyword=${encodeURIComponent(kw)}`);
-        const data = await res.json();
-        setResults(data.items ?? []);
-      } finally {
-        setLoading(false);
-      }
-    }, 400);
-  }
+  // 열릴 때 전체 목록 로드
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/approval/emp-search?companyCode=${companyCode}&keyword=`)
+      .then((r) => r.json())
+      .then((data) => setAllEmps(data.items ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [companyCode]);
+
+  // 키워드로 클라이언트 필터링
+  const results = keyword.trim()
+    ? allEmps.filter(
+        (e) =>
+          e.EMP_NAME.includes(keyword) ||
+          e.EMP_CODE.includes(keyword),
+      )
+    : allEmps;
 
   const selectedCodes = new Set(selected.map((m) => m.empCode));
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center px-4" onClick={onClose}>
       <div
-        className="bg-white w-full rounded-t-2xl max-h-[70vh] flex flex-col"
+        className="bg-white w-full max-w-sm rounded-2xl max-h-[70vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
-          <h2 className="font-bold text-gray-900">직원 검색</h2>
+          <h2 className="font-bold text-gray-900">직원 선택</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -122,7 +125,7 @@ function EmpPicker({
             <input
               autoFocus
               value={keyword}
-              onChange={(e) => { setKeyword(e.target.value); search(e.target.value); }}
+              onChange={(e) => setKeyword(e.target.value)}
               placeholder="이름 또는 사원번호 검색"
               className="flex-1 bg-transparent text-sm focus:outline-none"
             />
@@ -130,11 +133,8 @@ function EmpPicker({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {results.length === 0 && keyword && !loading && (
+          {!loading && results.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-8">검색 결과가 없습니다</p>
-          )}
-          {results.length === 0 && !keyword && (
-            <p className="text-sm text-gray-400 text-center py-8">이름이나 사원번호를 입력하세요</p>
           )}
           {results.map((row) => {
             const isSelected = selectedCodes.has(row.EMP_CODE);

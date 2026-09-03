@@ -17,10 +17,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   }
 
-  const params = new URLSearchParams({
-    proc: 'usp_mobile_apvmng_emp_search',
-    param1: keyword,
-  });
+  // R2JsonProc.asp는 빈값 param을 차단 → keyword 없으면 전체 목록 SP 사용
+  const params = keyword.trim()
+    ? new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_search', param1: keyword })
+    : new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_list' });
 
   const res = await fetch(`${resolved.baseUrl}/R2JsonProc.asp?${params}`, { cache: 'no-store' }).catch(() => null);
   if (!res?.ok) return NextResponse.json({ items: [] });

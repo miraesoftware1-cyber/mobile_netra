@@ -423,14 +423,37 @@ BEGIN
 END
 GO
 
--- ─── 직원 검색 프로시저 ────────────────────────────────────────
+-- ─── 직원 전체 목록 (파라미터 없음 - 전체 조회용) ─────────────
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_emp_list' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_emp_list
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_emp_list
+AS
+BEGIN
+    SET NOCOUNT ON
+
+    SELECT TOP 200
+        e.emp_code  AS EMP_CODE,
+        e.emp_name  AS EMP_NAME,
+        ISNULL(d.dpt_name, '') AS DPT_NAME
+    FROM mst_emp e WITH(NOLOCK)
+    LEFT JOIN mst_dpt d WITH(NOLOCK)
+        ON d.corp_code = e.corp_code AND d.dpt_code = e.dpt_code
+    WHERE ISNULL(e.ter_date, '') = ''
+    ORDER BY e.emp_name
+END
+GO
+
+-- ─── 직원 검색 프로시저 (키워드 필수) ────────────────────────────
 
 IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_emp_search' AND xtype = 'P')
     DROP PROCEDURE usp_mobile_apvmng_emp_search
 GO
 
 CREATE PROCEDURE usp_mobile_apvmng_emp_search
-    @KEYWORD NVARCHAR(100) = ''    -- 이름 또는 사원번호 (빈 값이면 전체)
+    @KEYWORD NVARCHAR(100)
 AS
 BEGIN
     SET NOCOUNT ON
@@ -444,8 +467,7 @@ BEGIN
         ON d.corp_code = e.corp_code AND d.dpt_code = e.dpt_code
     WHERE ISNULL(e.ter_date, '') = ''
       AND (
-          @KEYWORD = ''
-          OR e.emp_name LIKE '%' + @KEYWORD + '%'
+          e.emp_name LIKE '%' + @KEYWORD + '%'
           OR e.emp_code LIKE '%' + @KEYWORD + '%'
       )
     ORDER BY e.emp_name
