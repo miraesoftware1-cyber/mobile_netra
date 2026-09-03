@@ -69,20 +69,6 @@ const PARENT_LABEL_MAP: Record<string, string> = {
   APVMNG: "승인 관리",
 };
 
-// 항상 노출할 정적 섹션 (ERP 권한과 무관)
-const STATIC_SECTIONS: Section[] = [
-  {
-    key: "APVMNG",
-    label: "승인 관리",
-    groupIcon: CheckCircle2,
-    items: [
-      { key: "APVMNG_01", title: "승인 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_01" },
-      { key: "APVMNG_02", title: "승인 절차 설정", icon: Settings, href: "/APVMNG/APVMNG_02" },
-    ],
-  },
-];
-
-
 function groupIcon(menuId: string): LucideIcon {
   return GROUP_ICON_MAP[menuId] ?? LayoutGrid;
 }
@@ -260,7 +246,7 @@ export default function MenuPage() {
               <p className="text-xs text-gray-300">관리자에게 권한을 요청하세요</p>
             </div>
           )}
-          {[...sections, ...STATIC_SECTIONS].map((section) => {
+          {sections.map((section) => {
             const GroupIcon = section.groupIcon;
             const collapsed = collapsedGroups[section.key] ?? false;
             return (
