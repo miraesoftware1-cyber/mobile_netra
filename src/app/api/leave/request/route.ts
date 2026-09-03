@@ -118,11 +118,15 @@ export async function POST(request: NextRequest) {
 
   // 승인 절차 설정 확인 → 있으면 승인 시스템, 없으면 기존 부서장 푸시
   try {
-    const procRes = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/approval/process?companyCode=${encodeURIComponent(companyCode)}&menuId=LEAVE_01`,
-      { cache: 'no-store' }
-    ).catch(() => null);
-    const procData = procRes?.ok ? await procRes.json().catch(() => null) : null;
+    // ERP SP 직접 호출 (self HTTP call 방지)
+    const procParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' });
+    const procRes = await fetch(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' }).catch(() => null);
+    const procRaw = procRes?.ok ? await procRes.json().catch(() => null) : null;
+
+    let procData: { exists: boolean; config: { steps: { stepNo: number; type: string; members: { empCode: string; empName: string }[]; threshold: number; messageTitle: string; messageBody: string }[]; endMessage: { title: string; body: string } } | null } | null = null;
+    if (procRaw && String(procRaw.Flag) === '0' && procRaw.items?.[0]) {
+      try { procData = { exists: true, config: JSON.parse(procRaw.items[0].CONFIG_JSON) }; } catch { /* ignore */ }
+    }
 
     if (procData?.exists && procData.config?.steps?.length > 0) {
       // ── 승인 절차 시스템 사용 ──────────────────────────────
@@ -161,27 +165,58 @@ export async function POST(request: NextRequest) {
         사유: reason || note,
       };
 
-      await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/approval/request`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            companyCode,
-            corpCode: corp_code,
-            menuId: 'LEAVE_01',
-            menuName: '연차 신청',
-            reqEmpCode: emp_code,
-            reqEmpName: emp_name,
-            payloadJson,
-            procSnapshot: config,
-            totalSteps: config.steps.length,
-            stepApprovers,
-            stepMessageTitle: step1?.messageTitle ?? '연차 신청 알림',
-            stepMessageBody: step1?.messageBody?.replace('{requesterName}', emp_name || emp_code).replace('{menuName}', '연차 신청') ?? `${emp_name || emp_code}님이 연차를 신청했습니다.`,
-          }),
+      // 승인 요청 생성 (ERP SP 직접 호출)
+      const createParams = new URLSearchParams({
+        proc: 'usp_mobile_apvmng_request_create',
+        param1: 'LEAVE_01',
+        param2: emp_code,
+        param3: emp_name,
+        param4: JSON.stringify(payloadJson),
+        param5: JSON.stringify(config),
+        param6: String(config.steps.length),
+      });
+      const createRes = await fetch(`${baseUrl}/R2JsonProc.asp?${createParams}`, { cache: 'no-store' }).catch(() => null);
+      const createData = await createRes?.json().catch(() => null);
+      const reqId: number = createData?.items?.[0]?.REQ_ID ?? 0;
+
+      if (reqId && String(createData?.Flag) === '0') {
+        // 단계별 승인자 등록
+        for (const apv of stepApprovers) {
+          const apvParams = new URLSearchParams({
+            proc: 'usp_mobile_apvmng_step_apv_add',
+            param1: String(reqId),
+            param2: String(apv.stepNo),
+            param3: apv.apvType,
+            param4: apv.empCode,
+            param5: String(apv.threshold),
+          });
+          await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
         }
-      ).catch((err) => console.error('[leave/request] approval/request 실패:', err));
+
+        // 1단계 승인자에게 푸시
+        const step1EmpCodes = stepApprovers.filter((a) => a.stepNo === 1).map((a) => a.empCode);
+        if (step1EmpCodes.length > 0) {
+          const placeholders = step1EmpCodes.map((_, i) => `$${i + 2}`).join(',');
+          const { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
+            `SELECT subscription FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
+            [corp_code, ...step1EmpCodes],
+          );
+          const msgTitle = step1?.messageTitle ?? '연차 신청 알림';
+          const msgBody = (step1?.messageBody ?? '{requesterName}님이 연차를 신청했습니다.')
+            .replace('{requesterName}', emp_name || emp_code)
+            .replace('{menuName}', '연차 신청');
+          await Promise.allSettled(
+            subs.map((row) =>
+              sendPushNotification(row.subscription, {
+                title: msgTitle,
+                body: msgBody,
+                url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
+                tag: `approval-${reqId}`,
+              }),
+            ),
+          );
+        }
+      }
 
     } else {
       // ── 기존 부서장 직접 푸시 ──────────────────────────────
