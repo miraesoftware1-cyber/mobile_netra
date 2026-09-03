@@ -200,9 +200,9 @@ function MsgPopup({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center px-4" onClick={onClose}>
       <div
-        className="bg-white w-full rounded-t-2xl max-h-[88vh] flex flex-col"
+        className="bg-white w-full max-w-sm rounded-2xl max-h-[88vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
@@ -536,12 +536,14 @@ export default function ApprovalProcessPage() {
                           </button>
                         </div>
                       ))}
-                      <button
-                        onClick={() => setEmpPicker({ stepId: step.id })}
-                        className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-primary hover:text-primary transition-colors"
-                      >
-                        + 승인자 선택
-                      </button>
+                      {step.members.length === 0 && (
+                        <button
+                          onClick={() => setEmpPicker({ stepId: step.id })}
+                          className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                        >
+                          + 승인자 선택
+                        </button>
+                      )}
                     </div>
                   )}
 
