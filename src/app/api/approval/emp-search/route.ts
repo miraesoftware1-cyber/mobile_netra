@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const companyCode = searchParams.get('companyCode') ?? '';
   const keyword     = searchParams.get('keyword') ?? '';
+  const listType    = searchParams.get('listType') ?? 'emp'; // 'emp' | 'group'
 
   if (!companyCode) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
@@ -17,10 +18,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   }
 
-  // keyword 없으면 전체 목록 SP (param1='' 형태로 R2JsonProc 호환)
-  const params = keyword.trim()
-    ? new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_search', param1: keyword })
-    : new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_list', param1: '' });
+  // listType=group → 사용자 그룹 목록 SP, 아니면 직원 목록 SP
+  let params: URLSearchParams;
+  if (listType === 'group') {
+    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_list', param1: '' });
+  } else if (keyword.trim()) {
+    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_search', param1: keyword });
+  } else {
+    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_list', param1: '' });
+  }
 
   const url = `${resolved.baseUrl}/R2JsonProc.asp?${params}`;
   const res = await fetch(url, { cache: 'no-store' }).catch(() => null);

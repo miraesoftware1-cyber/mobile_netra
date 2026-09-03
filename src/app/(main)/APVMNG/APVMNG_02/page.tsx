@@ -90,12 +90,15 @@ function EmpPicker({
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/approval/emp-search?companyCode=${companyCode}&keyword=`)
+    const qs = mode === 'group'
+      ? `companyCode=${companyCode}&listType=group`
+      : `companyCode=${companyCode}&keyword=`;
+    fetch(`/api/approval/emp-search?${qs}`)
       .then((r) => r.json())
       .then((data) => setAllEmps(data.items ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [companyCode]);
+  }, [companyCode, mode]);
 
   const filtered = keyword.trim()
     ? allEmps.filter((e) => e.EMP_NAME.includes(keyword) || e.EMP_CODE.includes(keyword))
@@ -116,7 +119,7 @@ function EmpPicker({
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-gray-900">
-            {mode === 'individual' ? '승인자 선택' : '그룹 구성원 선택'}
+            {mode === 'individual' ? '승인자 선택' : '그룹 선택'}
           </h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
             <X className="w-5 h-5 text-gray-500" />

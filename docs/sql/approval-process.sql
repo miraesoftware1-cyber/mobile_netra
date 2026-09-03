@@ -430,6 +430,7 @@ IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_emp_list' AN
 GO
 
 CREATE PROCEDURE usp_mobile_apvmng_emp_list
+    @PARAM1 NVARCHAR(100) = ''  -- R2JsonProc.asp 호환용 더미
 AS
 BEGIN
     SET NOCOUNT ON
@@ -471,6 +472,28 @@ BEGIN
           OR e.emp_code LIKE '%' + @KEYWORD + '%'
       )
     ORDER BY e.emp_name
+END
+GO
+
+-- ─── 사용자 그룹 목록 (그룹 단계용) ─────────────────────────────
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_group_list' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_group_list
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_group_list
+    @PARAM1 NVARCHAR(100) = ''  -- R2JsonProc.asp 호환용 더미
+AS
+BEGIN
+    SET NOCOUNT ON
+
+    SELECT
+        USER_ID   AS EMP_CODE,
+        USER_NAME AS EMP_NAME,
+        ''        AS DPT_NAME
+    FROM ENV_USER WITH(NOLOCK)
+    WHERE USER_TYPE = 'G'
+    ORDER BY USER_ID
 END
 GO
 
