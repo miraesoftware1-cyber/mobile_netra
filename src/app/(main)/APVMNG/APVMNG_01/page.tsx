@@ -117,14 +117,6 @@ function ApprovalInboxContent() {
     if (!detail) return;
     setActionLoading(true);
     try {
-      // 다음 단계 승인자 구하기
-      const nextStep = detail.currentStep + 1;
-      const nextApprovers = action === 'APPROVED' && nextStep <= detail.totalSteps
-        ? detail.steps.filter((s) => s.STEP_NO === nextStep).map((s) => s.EMP_CODE)
-        : [];
-      const isLast = nextStep > detail.totalSteps;
-      const stepConfig = detail.procSnapshot?.steps?.find((s) => s.stepNo === nextStep);
-
       const res = await fetch('/api/approval/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,13 +128,6 @@ function ApprovalInboxContent() {
           empName,
           action,
           comment,
-          nextStepApprovers: nextApprovers,
-          nextStepTitle: stepConfig?.messageTitle ?? '',
-          nextStepBody: stepConfig?.messageBody ?? '',
-          finalNotify: isLast || action === 'REJECTED',
-          reqEmpCode: detail.reqEmpCode,
-          finalTitle: action === 'APPROVED' ? '승인 완료' : '반려 처리',
-          finalBody: action === 'APPROVED' ? '요청이 최종 승인되었습니다.' : `${empName}님이 반려했습니다.`,
         }),
       });
       if (res.ok) {

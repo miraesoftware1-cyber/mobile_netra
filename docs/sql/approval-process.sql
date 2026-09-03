@@ -377,23 +377,23 @@ BEGIN
             SET STATUS = 'REJECTED', UPD_DT = GETDATE()
             WHERE REQ_ID = @REQ_ID
 
-            SELECT '0' AS Flag, '반려 처리되었습니다.' AS MSG, 'REJECTED' AS NEW_STATUS
+            SELECT '0' AS Flag, '반려 처리되었습니다.' AS MSG, 'REJECTED' AS NEW_STATUS, 0 AS NEXT_STEP_NO
             RETURN
         END
 
         -- 승인: 이 단계 threshold 확인
-        SELECT @THRESHOLD = THRESHOLD
+        SELECT @THRESHOLD = ISNULL(MAX(THRESHOLD), 1)
         FROM TB_MOBILE_APVMNG_STEP_APV
-        WHERE REQ_ID = @REQ_ID AND STEP_NO = @CURRENT_STEP AND EMP_CODE = @APV_CODE
+        WHERE REQ_ID = @REQ_ID AND STEP_NO = @CURRENT_STEP
 
-        SELECT @APPROVE_CNT = COUNT(*)
+        SELECT @APPROVE_CNT = COUNT(DISTINCT APV_CODE)
         FROM TB_MOBILE_APVMNG_ACTION
         WHERE REQ_ID = @REQ_ID AND STEP_NO = @CURRENT_STEP AND ACTION = 'APPROVE'
 
         -- threshold 미달: 아직 대기
         IF @APPROVE_CNT < @THRESHOLD
         BEGIN
-            SELECT '0' AS Flag, '승인되었습니다. 추가 승인 대기 중입니다.' AS MSG, 'PENDING' AS NEW_STATUS
+            SELECT '0' AS Flag, '승인되었습니다. 추가 승인 대기 중입니다.' AS MSG, 'PENDING' AS NEW_STATUS, 0 AS NEXT_STEP_NO
             RETURN
         END
 
@@ -404,7 +404,7 @@ BEGIN
             SET CURRENT_STEP = @CURRENT_STEP + 1, UPD_DT = GETDATE()
             WHERE REQ_ID = @REQ_ID
 
-            SELECT '0' AS Flag, '승인되었습니다. 다음 단계로 이동합니다.' AS MSG, 'PENDING' AS NEW_STATUS
+            SELECT '0' AS Flag, '승인되었습니다. 다음 단계로 이동합니다.' AS MSG, 'PENDING' AS NEW_STATUS, @CURRENT_STEP + 1 AS NEXT_STEP_NO
         END
         ELSE
         BEGIN
@@ -413,13 +413,48 @@ BEGIN
             SET STATUS = 'APPROVED', UPD_DT = GETDATE()
             WHERE REQ_ID = @REQ_ID
 
-            SELECT '0' AS Flag, '최종 승인이 완료되었습니다.' AS MSG, 'APPROVED' AS NEW_STATUS
+            SELECT '0' AS Flag, '최종 승인이 완료되었습니다.' AS MSG, 'APPROVED' AS NEW_STATUS, 0 AS NEXT_STEP_NO
         END
 
     END TRY
     BEGIN CATCH
-        SELECT '1' AS Flag, ERROR_MESSAGE() AS MSG, '' AS NEW_STATUS
+        SELECT '1' AS Flag, ERROR_MESSAGE() AS MSG, '' AS NEW_STATUS, 0 AS NEXT_STEP_NO
     END CATCH
+END
+GO
+
+-- ─── 단계별 승인자 조회 ───────────────────────────────────────
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_step_approvers' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_step_approvers
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_step_approvers
+    @REQ_ID  INT,
+    @STEP_NO INT
+AS
+BEGIN
+    SET NOCOUNT ON
+    SELECT EMP_CODE
+    FROM TB_MOBILE_APVMNG_STEP_APV WITH(NOLOCK)
+    WHERE REQ_ID = @REQ_ID AND STEP_NO = @STEP_NO
+END
+GO
+
+-- ─── 요청자 코드 조회 (알림용) ───────────────────────────────────
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_req_info' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_req_info
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_req_info
+    @REQ_ID INT
+AS
+BEGIN
+    SET NOCOUNT ON
+    SELECT REQ_EMP_CODE, MENU_NAME, REQ_EMP_NAME
+    FROM TB_MOBILE_APVMNG_REQUEST WITH(NOLOCK)
+    WHERE REQ_ID = @REQ_ID
 END
 GO
 
