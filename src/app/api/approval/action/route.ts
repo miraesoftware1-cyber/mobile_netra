@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     const infoRow = infoData?.items?.[0] ?? {};
     reqEmpCode = String(infoRow.REQ_EMP_CODE ?? '');
     reqEmpName = String(infoRow.REQ_EMP_NAME ?? '');
-    menuName   = String(infoRow.MENU_NAME ?? '');
+    menuName   = String(infoRow.MENU_ID ?? '');
   } catch { /* 무시 */ }
 
   // 3. 다음 단계 승인자에게 푸시 (단계 넘어갔을 때)
