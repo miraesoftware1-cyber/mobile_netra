@@ -407,4 +407,33 @@ BEGIN
 END
 GO
 
+-- ─── 직원 검색 프로시저 ────────────────────────────────────────
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_emp_search' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_emp_search
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_emp_search
+    @KEYWORD NVARCHAR(100) = ''    -- 이름 또는 사원번호 (빈 값이면 전체)
+AS
+BEGIN
+    SET NOCOUNT ON
+    -- 고객사 ERP 환경에 따라 직원 테이블 명칭이 다를 수 있음.
+    -- 아래는 일반적인 인사 마스터 테이블을 가정합니다.
+    -- 실제 고객사 테이블/컬럼명에 맞게 수정하세요.
+    SELECT TOP 50
+        EMP_CODE,
+        EMP_NAME,
+        ISNULL(DPT_NAME, '') AS DPT_NAME
+    FROM HR_EMP_MASTER
+    WHERE USE_YN = 'Y'
+      AND (
+          @KEYWORD = ''
+          OR EMP_NAME LIKE '%' + @KEYWORD + '%'
+          OR EMP_CODE LIKE '%' + @KEYWORD + '%'
+      )
+    ORDER BY EMP_NAME
+END
+GO
+
 -- ─── 끝 ──────────────────────────────────────────────────────
