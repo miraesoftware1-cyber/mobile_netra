@@ -73,11 +73,13 @@ type EmpRow = { EMP_CODE: string; EMP_NAME: string; DPT_NAME: string };
 
 function EmpPicker({
   companyCode,
+  mode,
   selected,
   onSelect,
   onClose,
 }: {
   companyCode: string;
+  mode: 'individual' | 'group';
   selected: StepMember[];
   onSelect: (m: StepMember) => void;
   onClose: () => void;
@@ -86,7 +88,6 @@ function EmpPicker({
   const [allEmps, setAllEmps] = useState<EmpRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 열릴 때 전체 목록 로드
   useEffect(() => {
     setLoading(true);
     fetch(`/api/approval/emp-search?companyCode=${companyCode}&keyword=`)
@@ -96,25 +97,27 @@ function EmpPicker({
       .finally(() => setLoading(false));
   }, [companyCode]);
 
-  // 키워드로 클라이언트 필터링
-  const results = keyword.trim()
-    ? allEmps.filter(
-        (e) =>
-          e.EMP_NAME.includes(keyword) ||
-          e.EMP_CODE.includes(keyword),
-      )
+  const filtered = keyword.trim()
+    ? allEmps.filter((e) => e.EMP_NAME.includes(keyword) || e.EMP_CODE.includes(keyword))
     : allEmps;
 
   const selectedCodes = new Set(selected.map((m) => m.empCode));
 
+  function handleSelect(row: EmpRow) {
+    onSelect({ empCode: row.EMP_CODE, empName: row.EMP_NAME });
+    if (mode === 'individual') onClose(); // 개인: 선택 즉시 닫힘
+  }
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center px-4" onClick={onClose}>
       <div
-        className="bg-white w-full max-w-sm rounded-2xl max-h-[70vh] flex flex-col shadow-xl"
+        className="bg-white w-full max-w-sm rounded-2xl max-h-[72vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
-          <h2 className="font-bold text-gray-900">직원 선택</h2>
+          <h2 className="font-bold text-gray-900">
+            {mode === 'individual' ? '승인자 선택' : '그룹 구성원 선택'}
+          </h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -132,27 +135,45 @@ function EmpPicker({
             {loading && <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />}
           </div>
         </div>
+
         <div className="flex-1 overflow-y-auto">
-          {!loading && results.length === 0 && (
+          {!loading && filtered.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-8">검색 결과가 없습니다</p>
           )}
-          {results.map((row) => {
+          {filtered.map((row) => {
             const isSelected = selectedCodes.has(row.EMP_CODE);
             return (
               <button
                 key={row.EMP_CODE}
-                onClick={() => onSelect({ empCode: row.EMP_CODE, empName: row.EMP_NAME })}
-                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-50 last:border-0"
+                onClick={() => handleSelect(row)}
+                className={`w-full px-4 py-3 flex items-center justify-between transition-colors border-b border-gray-100 last:border-0 ${isSelected ? 'bg-primary/5' : 'hover:bg-gray-50 active:bg-gray-100'}`}
               >
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-gray-900">{row.EMP_NAME}</p>
-                  <p className="text-xs text-gray-400">{row.DPT_NAME} · {row.EMP_CODE}</p>
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isSelected ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    {row.EMP_NAME.charAt(0)}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-gray-900">{row.EMP_NAME}</p>
+                    <p className="text-xs text-gray-400">{row.DPT_NAME} · {row.EMP_CODE}</p>
+                  </div>
                 </div>
                 {isSelected && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
               </button>
             );
           })}
         </div>
+
+        {/* 그룹 모드: 완료 버튼 */}
+        {mode === 'group' && (
+          <div className="px-4 py-3 border-t border-gray-100 flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="w-full py-3 bg-primary text-white rounded-xl text-sm font-bold active:opacity-90"
+            >
+              완료 {selected.length > 0 ? `(${selected.length}명 선택)` : ''}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -382,6 +403,11 @@ export default function ApprovalProcessPage() {
   function addMember(stepId: string, member: StepMember) {
     setSteps((prev) => prev.map((s) => {
       if (s.id !== stepId) return s;
+      if (s.type === 'individual') {
+        // 개인: 항상 1명으로 교체
+        return { ...s, members: [member] };
+      }
+      // 그룹: 토글
       const already = s.members.some((m) => m.empCode === member.empCode);
       if (already) return { ...s, members: s.members.filter((m) => m.empCode !== member.empCode) };
       return { ...s, members: [...s.members, member] };
@@ -617,6 +643,7 @@ export default function ApprovalProcessPage() {
       {empPicker && (
         <EmpPicker
           companyCode={companyCode}
+          mode={steps.find((s) => s.id === empPicker.stepId)?.type === 'group' ? 'group' : 'individual'}
           selected={steps.find((s) => s.id === empPicker.stepId)?.members ?? []}
           onSelect={(m) => addMember(empPicker.stepId, m)}
           onClose={() => setEmpPicker(null)}
