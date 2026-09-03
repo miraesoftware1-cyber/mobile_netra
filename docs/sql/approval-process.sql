@@ -418,21 +418,21 @@ CREATE PROCEDURE usp_mobile_apvmng_emp_search
 AS
 BEGIN
     SET NOCOUNT ON
-    -- 고객사 ERP 환경에 따라 직원 테이블 명칭이 다를 수 있음.
-    -- 아래는 일반적인 인사 마스터 테이블을 가정합니다.
-    -- 실제 고객사 테이블/컬럼명에 맞게 수정하세요.
+
     SELECT TOP 50
-        EMP_CODE,
-        EMP_NAME,
-        ISNULL(DPT_NAME, '') AS DPT_NAME
-    FROM HR_EMP_MASTER
-    WHERE USE_YN = 'Y'
+        e.emp_code  AS EMP_CODE,
+        e.emp_name  AS EMP_NAME,
+        ISNULL(d.dpt_name, '') AS DPT_NAME
+    FROM mst_emp e WITH(NOLOCK)
+    LEFT JOIN mst_dpt d WITH(NOLOCK)
+        ON d.corp_code = e.corp_code AND d.dpt_code = e.dpt_code
+    WHERE ISNULL(e.ter_date, '') = ''
       AND (
           @KEYWORD = ''
-          OR EMP_NAME LIKE '%' + @KEYWORD + '%'
-          OR EMP_CODE LIKE '%' + @KEYWORD + '%'
+          OR e.emp_name LIKE '%' + @KEYWORD + '%'
+          OR e.emp_code LIKE '%' + @KEYWORD + '%'
       )
-    ORDER BY EMP_NAME
+    ORDER BY e.emp_name
 END
 GO
 
