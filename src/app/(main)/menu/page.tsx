@@ -139,6 +139,19 @@ export default function MenuPage() {
     window.localStorage.setItem(MENU_COLLAPSE_STORAGE_KEY, JSON.stringify(collapsedGroups));
   }, [collapsedGroups, isStorageHydrated]);
 
+  // 승인 관리는 ERP 권한 시스템과 무관하게 항상 표시 (mobile-native feature)
+  const STATIC_SECTIONS: Section[] = [
+    {
+      key: "APVMNG",
+      label: "승인 관리",
+      groupIcon: CheckCircle2,
+      items: [
+        { key: "APVMNG_01", title: "승인 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_01" },
+        { key: "APVMNG_02", title: "승인 절차 설정", icon: Settings, href: "/APVMNG/APVMNG_02" },
+      ],
+    },
+  ];
+
   const sections = useMemo((): Section[] => {
     if (!dbLoaded) return [];
 
@@ -153,11 +166,14 @@ export default function MenuPage() {
       return !perm || perm.view;
     };
 
-    const dbItems = storeItems;
-    if (dbItems.length === 0) return [];
+    // APVMNG는 STATIC_SECTIONS로 처리 → DB 목록에서 제외
+    const dbItems = storeItems.filter((m) => m.menu_id !== "APVMNG" && m.menu_pid !== "APVMNG" && !m.menu_id.startsWith("APVMNG"));
+    if (dbItems.length === 0) return [...STATIC_SECTIONS];
 
     const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";
     const hasParents = dbItems.some(isParent);
+
+    let dbSections: Section[];
 
     if (hasParents) {
       const parents = dbItems
@@ -165,7 +181,7 @@ export default function MenuPage() {
         .filter((p) => parentViewable(p.menu_id))
         .sort((a, b) => Number(a.menu_order) - Number(b.menu_order));
 
-      return parents
+      dbSections = parents
         .map((parent) => {
           const children = dbItems
             .filter((m) => !isParent(m) && m.menu_pid === parent.menu_id && canView(m.menu_id))
@@ -183,38 +199,39 @@ export default function MenuPage() {
           };
         })
         .filter((s) => s.items.length > 0);
-    }
-
-    // proc이 자식 항목만 반환하는 경우 → menu_pid로 그룹화
-    const pidOrder: string[] = [];
-    const grouped = new Map<string, MenuDBItem[]>();
-    for (const item of dbItems) {
-      const pid = item.menu_pid && item.menu_pid !== "NULL" ? item.menu_pid : null;
-      if (!pid || !canView(item.menu_id)) continue;
-      // 대메뉴 권한 체크 (storePerms에 pid 행이 있으면)
-      if (!parentViewable(pid)) continue;
-      if (!grouped.has(pid)) {
-        pidOrder.push(pid);
-        grouped.set(pid, []);
+    } else {
+      // proc이 자식 항목만 반환하는 경우 → menu_pid로 그룹화
+      const pidOrder: string[] = [];
+      const grouped = new Map<string, MenuDBItem[]>();
+      for (const item of dbItems) {
+        const pid = item.menu_pid && item.menu_pid !== "NULL" ? item.menu_pid : null;
+        if (!pid || !canView(item.menu_id)) continue;
+        if (!parentViewable(pid)) continue;
+        if (!grouped.has(pid)) {
+          pidOrder.push(pid);
+          grouped.set(pid, []);
+        }
+        grouped.get(pid)!.push(item);
       }
-      grouped.get(pid)!.push(item);
+      dbSections = pidOrder
+        .map((pid) => ({
+          key: pid,
+          label: PARENT_LABEL_MAP[pid] ?? pid,
+          groupIcon: groupIcon(pid),
+          items: (grouped.get(pid) ?? [])
+            .sort((a, b) => Number(a.menu_order) - Number(b.menu_order))
+            .map((c) => ({
+              key: c.menu_id,
+              title: c.menu_name,
+              icon: menuItemIcon(c.menu_id),
+              href: `/${pid}/${c.menu_id}`,
+            })),
+        }))
+        .filter((s) => s.items.length > 0);
     }
 
-    return pidOrder
-      .map((pid) => ({
-        key: pid,
-        label: PARENT_LABEL_MAP[pid] ?? pid,
-        groupIcon: groupIcon(pid),
-        items: (grouped.get(pid) ?? [])
-          .sort((a, b) => Number(a.menu_order) - Number(b.menu_order))
-          .map((c) => ({
-            key: c.menu_id,
-            title: c.menu_name,
-            icon: menuItemIcon(c.menu_id),
-            href: `/${pid}/${c.menu_id}`,
-          })),
-      }))
-      .filter((s) => s.items.length > 0);
+    return [...dbSections, ...STATIC_SECTIONS];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeItems, storePerms, dbLoaded]);
 
   function toggleGroup(key: string) {

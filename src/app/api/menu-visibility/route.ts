@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     for (const m of menuData.items) {
       fullPerms[m.menu_id] = { view: true, add: true, edit: true, del: true, approve: true };
     }
-    return NextResponse.json({ items: menuData.items, perms: fullPerms, raw_sample: null });
+    return NextResponse.json({ items: menuData.items, perms: fullPerms });
   }
 
   // 2. 사용자 권한 조회
@@ -182,17 +182,5 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
-  // raw_sample: 첫 번째 권한 행의 실제 필드명 확인용 (개발/디버그용)
-  const raw_sample = permData.items?.[0] ?? null;
-
-  // 서버 로그로 권한 상태 확인
-  console.log("[menu-visibility]", {
-    userId,
-    permRows_count: permRows.length,
-    perms_summary: Object.fromEntries(Object.entries(perms).map(([k, v]) => [k, v.view ? "Y" : "N"])),
-    visibleIds: [...visibleIds],
-    filteredItems_ids: filteredItems.map((m) => m.menu_id),
-  });
-
-  return NextResponse.json({ items: filteredItems, perms, raw_sample });
+  return NextResponse.json({ items: filteredItems, perms });
 }
