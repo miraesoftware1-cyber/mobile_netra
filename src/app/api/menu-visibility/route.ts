@@ -95,6 +95,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items: null });
   }
 
+  // 필드명 대소문자 정규화 (proc이 대문자로 반환하는 경우 대응)
+  menuData.items = (menuData.items as unknown as Record<string, unknown>[]).map((raw) => {
+    const r = normRow(raw);
+    return {
+      menu_id:    String(r.menu_id ?? ""),
+      menu_pid:   r.menu_pid != null && r.menu_pid !== "NULL" ? String(r.menu_pid) : null,
+      menu_name:  String(r.menu_name ?? ""),
+      menu_exec:  String(r.menu_exec ?? ""),
+      menu_order: Number(r.menu_order ?? 99),
+      use_yn:     r.use_yn != null ? String(r.use_yn) : undefined,
+    } as MenuDBItem;
+  });
+
   // use_yn = Y 인 메뉴만 사용
   menuData.items = menuData.items.filter(
     (m) => !m.use_yn || m.use_yn.toUpperCase() === "Y",
