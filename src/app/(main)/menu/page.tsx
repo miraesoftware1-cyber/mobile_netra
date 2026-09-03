@@ -15,6 +15,9 @@ import {
   ChevronUp,
   HardHat,
   UserPlus,
+  CheckCircle2,
+  Settings,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
@@ -39,6 +42,9 @@ const MENU_ID_ICON_MAP: Record<string, LucideIcon> = {
   // 일정관리 자식
   SCH_01: CalendarPlus,
   SCH_02: CalendarSearch,
+  // 승인 관리
+  APVMNG_01: ClipboardList,
+  APVMNG_02: Settings,
 };
 
 function menuItemIcon(menuId: string): LucideIcon {
@@ -47,19 +53,34 @@ function menuItemIcon(menuId: string): LucideIcon {
 
 // 부모 그룹 아이콘: menu_id 기준
 const GROUP_ICON_MAP: Record<string, LucideIcon> = {
-  LEAVE: CalendarDays,
-  EXP:   Wallet,
-  DAILY: HardHat,
-  SCH:   CalendarDays,
+  LEAVE:  CalendarDays,
+  EXP:    Wallet,
+  DAILY:  HardHat,
+  SCH:    CalendarDays,
+  APVMNG: CheckCircle2,
 };
 
 // DB proc이 부모 항목을 반환하지 않을 때 사용하는 레이블 맵
 const PARENT_LABEL_MAP: Record<string, string> = {
-  LEAVE: "연차/휴가",
-  EXP:   "지출결의",
-  DAILY: "일용직 인사정보",
-  SCH:   "일정관리",
+  LEAVE:  "연차/휴가",
+  EXP:    "지출결의",
+  DAILY:  "일용직 인사정보",
+  SCH:    "일정관리",
+  APVMNG: "승인 관리",
 };
+
+// 항상 노출할 정적 섹션 (ERP 권한과 무관)
+const STATIC_SECTIONS: Section[] = [
+  {
+    key: "APVMNG",
+    label: "승인 관리",
+    groupIcon: CheckCircle2,
+    items: [
+      { key: "APVMNG_01", title: "승인 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_01" },
+      { key: "APVMNG_02", title: "승인 절차 설정", icon: Settings, href: "/APVMNG/APVMNG_02" },
+    ],
+  },
+];
 
 
 function groupIcon(menuId: string): LucideIcon {
@@ -239,7 +260,7 @@ export default function MenuPage() {
               <p className="text-xs text-gray-300">관리자에게 권한을 요청하세요</p>
             </div>
           )}
-          {sections.map((section) => {
+          {[...sections, ...STATIC_SECTIONS].map((section) => {
             const GroupIcon = section.groupIcon;
             const collapsed = collapsedGroups[section.key] ?? false;
             return (
