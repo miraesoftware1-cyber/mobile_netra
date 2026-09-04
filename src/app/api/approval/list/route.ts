@@ -43,20 +43,22 @@ export async function GET(request: NextRequest) {
   }
   const { baseUrl } = resolved;
 
-  // PG에서 이미 처리한 req_id 목록 조회
-  let actedReqIds: Set<number> = new Set();
+  // PG에서 이미 처리한 (req_id, step_no) 쌍 조회 — 단계별로 체크해야 다단계 승인자 누락 방지
+  let actedKeys: Set<string> = new Set();
+  let actedReqIds: Set<number> = new Set(); // 처리완료 탭용
   try {
-    const { rows } = await query<{ req_id: number }>(
-      `SELECT DISTINCT req_id FROM netra_apvmng_actions WHERE apv_code = $1`,
+    const { rows } = await query<{ req_id: number; step_no: number }>(
+      `SELECT req_id, step_no FROM netra_apvmng_actions WHERE apv_code = $1`,
       [empCode],
     );
+    actedKeys  = new Set(rows.map((r) => `${r.req_id}:${r.step_no}`));
     actedReqIds = new Set(rows.map((r) => Number(r.req_id)));
   } catch { /* 무시 */ }
 
   if (status === 'PENDING') {
-    // ERP PENDING 목록에서 이미 처리한 항목 제외
+    // ERP PENDING 목록에서 현재 단계를 이미 처리한 항목만 제외
     const items = await fetchErpList(baseUrl, erpId, 'PENDING');
-    const filtered = items.filter((item) => !actedReqIds.has(item.REQ_ID));
+    const filtered = items.filter((item) => !actedKeys.has(`${item.REQ_ID}:${item.CURRENT_STEP}`));
     return NextResponse.json({ items: filtered });
   }
 
