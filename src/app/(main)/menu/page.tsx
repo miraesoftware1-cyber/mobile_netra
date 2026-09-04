@@ -76,8 +76,6 @@ function groupIcon(menuId: string): LucideIcon {
 
 // ─── 공통 ────────────────────────────────────────────────────────────────────
 
-const MENU_COLLAPSE_STORAGE_KEY = "menu-collapsed-groups";
-
 type Section = {
   key: string;
   label: string;
@@ -100,7 +98,6 @@ export default function MenuPage() {
   const setMenuStorePerms = useMenuStore((s) => s.setPerms);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  const [isStorageHydrated, setIsStorageHydrated] = useState(false);
 
   useEffect(() => {
     // userId 없으면 API를 부를 수 없으므로 바로 "로드 완료, 빈 목록"으로 처리
@@ -126,23 +123,6 @@ export default function MenuPage() {
         setDbLoaded(true);
       });
   }, [companyCode, userId, userType]);
-
-  useEffect(() => {
-    const raw = window.localStorage.getItem(MENU_COLLAPSE_STORAGE_KEY);
-    if (raw) {
-      try {
-        setCollapsedGroups(JSON.parse(raw) as Record<string, boolean>);
-      } catch {
-        window.localStorage.removeItem(MENU_COLLAPSE_STORAGE_KEY);
-      }
-    }
-    setIsStorageHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isStorageHydrated) return;
-    window.localStorage.setItem(MENU_COLLAPSE_STORAGE_KEY, JSON.stringify(collapsedGroups));
-  }, [collapsedGroups, isStorageHydrated]);
 
   // 승인 관리는 ERP 권한 시스템과 무관하게 항상 표시 (mobile-native feature)
   const STATIC_SECTIONS: Section[] = [
@@ -270,7 +250,7 @@ export default function MenuPage() {
           )}
           {sections.map((section) => {
             const GroupIcon = section.groupIcon;
-            const collapsed = collapsedGroups[section.key] ?? false;
+            const collapsed = collapsedGroups[section.key] ?? true;
             return (
               <section key={section.key} className="flex flex-col gap-3 first:mt-0 mt-3">
                 <button

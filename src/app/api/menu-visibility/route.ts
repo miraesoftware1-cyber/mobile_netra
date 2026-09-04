@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { companyCode, userId, userType } = parsed.data;
+  console.log('[menu-visibility] userId:', userId, 'userType:', userType);
 
   const resolved = await resolveCompanyErpBaseUrl(companyCode);
   if (resolved.status !== "ok") {
@@ -140,6 +141,8 @@ export async function GET(request: NextRequest) {
   // Flag 값에 관계없이 허가된 menu_id 집합만 뽑는다.
   // Flag != 0(데이터 없음/오류)이면 items가 없거나 비어 있으므로 결과적으로 빈 배열이 된다.
   const permRows = (permData.items ?? []).map(normRow);
+  console.log('[menu-visibility] permRows sample:', JSON.stringify(permRows[0] ?? {}));
+  console.log('[menu-visibility] permRows count:', permRows.length);
 
   const perms: Record<string, MenuPerm> = {};
   for (const row of permRows) {
@@ -185,5 +188,6 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
+  console.log('[menu-visibility] filteredItems count:', filteredItems.length, 'ids:', filteredItems.map(m => m.menu_id));
   return NextResponse.json({ items: filteredItems, perms });
 }
