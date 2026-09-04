@@ -380,7 +380,8 @@ function ApprovalInboxContent() {
                           const comments = acts.filter(a => a.COMMENT);
 
                           // 현재 PENDING 단계: steps 배열(ERP 승인자 목록) 기준으로 이름+색상 표시
-                          const badges = isCurrentStep && detail.steps.length > 0
+                          const ORDER = { green: 0, red: 1, gray: 2 };
+                          const badges = (isCurrentStep && detail.steps.length > 0
                             ? detail.steps.map((s) => {
                                 const act = acts.find(a => a.EMP_CODE === s.EMP_CODE);
                                 const name = s.EMP_NAME || s.EMP_CODE;
@@ -392,7 +393,8 @@ function ApprovalInboxContent() {
                                 name: a.EMP_NAME,
                                 color: a.ACTION === 'APPROVED' ? 'green' as const : 'red' as const,
                                 icon: a.ACTION === 'APPROVED' ? 'check' as const : 'x' as const,
-                              }));
+                              }))
+                          ).sort((a, b) => ORDER[a.color] - ORDER[b.color]);
 
                           if (badges.length === 0) return null;
 
