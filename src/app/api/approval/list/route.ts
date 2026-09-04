@@ -66,16 +66,20 @@ export async function GET(request: NextRequest) {
       try {
         const reqIds = filtered.map((i) => i.REQ_ID);
         const ph = reqIds.map((_, i) => `$${i + 1}`).join(',');
-        const { rows: cntRows } = await query<{ req_id: number; step_no: number; cnt: string }>(
-          `SELECT req_id, step_no, COUNT(*)::text AS cnt FROM netra_apvmng_actions
+        const { rows: cntRows } = await query<{ req_id: number; step_no: number; cnt: string; apv_names: string }>(
+          `SELECT req_id, step_no, COUNT(*)::text AS cnt,
+                  STRING_AGG(COALESCE(apv_name, apv_code), ', ' ORDER BY created_at) AS apv_names
+           FROM netra_apvmng_actions
            WHERE req_id IN (${ph}) AND action = 'APPROVE' GROUP BY req_id, step_no`,
           reqIds,
         );
-        const cntMap = new Map(cntRows.map((r) => [`${r.req_id}:${r.step_no}`, Number(r.cnt)]));
+        const cntMap  = new Map(cntRows.map((r) => [`${r.req_id}:${r.step_no}`, Number(r.cnt)]));
+        const nameMap = new Map(cntRows.map((r) => [`${r.req_id}:${r.step_no}`, r.apv_names ?? '']));
         return NextResponse.json({
           items: filtered.map((item) => ({
             ...item,
-            APPROVE_CNT: cntMap.get(`${item.REQ_ID}:${item.CURRENT_STEP}`) ?? 0,
+            APPROVE_CNT:   cntMap.get(`${item.REQ_ID}:${item.CURRENT_STEP}`) ?? 0,
+            APPROVE_NAMES: nameMap.get(`${item.REQ_ID}:${item.CURRENT_STEP}`) ?? '',
           })),
         });
       } catch { /* 무시 */ }

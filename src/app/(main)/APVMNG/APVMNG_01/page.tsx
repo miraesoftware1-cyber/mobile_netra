@@ -13,6 +13,7 @@ type ListItem = {
   TOTAL_STEPS: number;
   THRESHOLD: number | null;
   APPROVE_CNT: number;
+  APPROVE_NAMES: string;
   STATUS: string;
   CREATED_AT: string;
 };
@@ -238,7 +239,8 @@ function ApprovalInboxContent() {
                 {item.CURRENT_STEP}단계 / {item.TOTAL_STEPS}단계
                 {(item.APPROVE_CNT > 0 || (item.THRESHOLD != null && item.THRESHOLD > 1)) && (
                   <span className="ml-1 text-primary font-medium">
-                    ({item.APPROVE_CNT}{item.THRESHOLD != null && item.THRESHOLD > 1 ? `/${item.THRESHOLD}` : ''}명 승인)
+                    {item.APPROVE_CNT}{item.THRESHOLD != null && item.THRESHOLD > 1 ? `/${item.THRESHOLD}` : ''}명 승인
+                    {item.APPROVE_NAMES ? ` (${item.APPROVE_NAMES})` : ''}
                   </span>
                 )}
               </span>
