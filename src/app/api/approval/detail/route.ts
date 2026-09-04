@@ -77,10 +77,14 @@ export async function GET(request: NextRequest) {
        WHERE a.req_id = $1 ORDER BY a.created_at ASC`,
       [reqId],
     );
+    // ERP step approvers의 이름으로 PG 빈값 보완 (user_id → 한국어 이름)
+    const nameMap = new Map<string, string>(
+      stepApprovers.filter(s => s.EMP_CODE && s.EMP_NAME).map(s => [s.EMP_CODE, s.EMP_NAME!]),
+    );
     actions = rows.map((r) => ({
       STEP_NO:    r.step_no,
-      EMP_CODE:   r.user_id,   // USER_ID로 변환 → steps.EMP_CODE와 매핑 가능
-      EMP_NAME:   r.apv_name,
+      EMP_CODE:   r.user_id,
+      EMP_NAME:   r.apv_name || nameMap.get(r.user_id) || r.user_id,
       ACTION:     r.action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
       COMMENT:    r.comment,
       CREATED_AT: r.created_at,
