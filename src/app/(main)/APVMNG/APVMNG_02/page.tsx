@@ -90,8 +90,9 @@ function EmpPicker({
 
   useEffect(() => {
     setLoading(true);
-    // group/individual 모두 개인 직원 목록 조회 (그룹 코드가 아닌 실제 empCode 저장)
-    const qs = `companyCode=${companyCode}&keyword=`;
+    const qs = mode === 'group'
+      ? `companyCode=${companyCode}&listType=group`
+      : `companyCode=${companyCode}&keyword=`;
     fetch(`/api/approval/emp-search?${qs}`)
       .then((r) => r.json())
       .then((data) => setAllEmps(data.items ?? []))

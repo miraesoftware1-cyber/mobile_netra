@@ -532,4 +532,27 @@ BEGIN
 END
 GO
 
+-- ─── 그룹 멤버 조회 (USER_GROUP 기준 개인 목록) ─────────────────
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_group_members' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_group_members
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_group_members
+    @PARAM1 NVARCHAR(100) = ''  -- GROUP_CODE (ENV_USER.USER_GROUP 값, e.g. '_신입사원')
+AS
+BEGIN
+    SET NOCOUNT ON
+
+    SELECT
+        USER_ID   AS EMP_CODE,
+        USER_NAME AS EMP_NAME,
+        ''        AS DPT_NAME
+    FROM ENV_USER WITH(NOLOCK)
+    WHERE USER_GROUP = @PARAM1
+      AND USER_TYPE = 'U'
+    ORDER BY USER_ID
+END
+GO
+
 -- ─── 끝 ──────────────────────────────────────────────────────

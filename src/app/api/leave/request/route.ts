@@ -196,10 +196,25 @@ async function runApprovalFlow({
       for (const h of heads) {
         stepApprovers.push({ stepNo: step.stepNo, apvType: 'DEPT_HEAD', empCode: h.emp_code, threshold: 1 });
       }
-    } else {
-      const apvType = step.type === 'group' ? 'GROUP' : 'INDIVIDUAL';
+    } else if (step.type === 'group') {
+      // 그룹 코드 → 실제 개인 멤버 조회
       for (const m of step.members ?? []) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType, empCode: m.empCode, threshold: step.threshold });
+        const memberParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_members', param1: m.empCode });
+        const memberRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${memberParams}`, { cache: 'no-store' });
+        const memberData = await memberRes?.json().catch(() => null);
+        const members: Array<{ EMP_CODE: string }> = memberData?.items ?? [];
+        console.log('[approval-flow] group expand', m.empCode, '→ members:', members.map(x => x.EMP_CODE));
+        if (members.length === 0) {
+          stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: m.empCode, threshold: step.threshold });
+        } else {
+          for (const mem of members) {
+            stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: mem.EMP_CODE, threshold: step.threshold });
+          }
+        }
+      }
+    } else {
+      for (const m of step.members ?? []) {
+        stepApprovers.push({ stepNo: step.stepNo, apvType: 'INDIVIDUAL', empCode: m.empCode, threshold: step.threshold });
       }
     }
   }
