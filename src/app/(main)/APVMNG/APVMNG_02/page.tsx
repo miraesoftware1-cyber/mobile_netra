@@ -558,12 +558,14 @@ export default function ApprovalProcessPage() {
                           </button>
                         </div>
                       ))}
-                      <button
-                        onClick={() => setEmpPicker({ stepId: step.id })}
-                        className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-primary hover:text-primary transition-colors"
-                      >
-                        + 그룹 구성원 추가
-                      </button>
+                      {step.members.length === 0 && (
+                        <button
+                          onClick={() => setEmpPicker({ stepId: step.id })}
+                          className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                        >
+                          + 그룹 구성원 추가
+                        </button>
+                      )}
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 whitespace-nowrap">최소 승인 수</span>
                         <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
