@@ -16,8 +16,8 @@ self.addEventListener("push", (event) => {
   // 승인 요청 알림이면 액션 버튼 추가 (Android·데스크탑 Chrome 지원)
   if (data.approvalAction) {
     notifOptions.actions = [
-      { action: "approve", title: "✅ 승인" },
-      { action: "reject",  title: "❌ 반려" },
+      { action: "reject",  title: "✖ 반려" },
+      { action: "approve", title: "✔ 승인" },
     ];
   }
 

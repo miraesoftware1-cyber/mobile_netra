@@ -5,6 +5,13 @@ import { sendPushNotification } from '@/lib/push/send-push';
 import { query } from '@/lib/db/postgres';
 import webpush from 'web-push';
 
+const MENU_LABEL: Record<string, string> = {
+  LEAVE_01: '연차 신청',
+  EXP_01:   '지출결의',
+  SCH_01:   '일정',
+};
+function getMenuLabel(id: string) { return MENU_LABEL[id] ?? id; }
+
 const actionSchema = z.object({
   companyCode: z.string().min(1),
   corpCode:    z.string().min(1),
@@ -181,11 +188,29 @@ export async function POST(request: NextRequest) {
       const nextEmpCodes: string[] = (apvData?.items ?? [])
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
-      await pushToEmps(corpCode, nextEmpCodes, `${menuId || '승인'} 요청 — ${nextStepNo}단계`, `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`, reqId, { companyCode, corpCode });
+      await pushToEmps(corpCode, nextEmpCodes, `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`, `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`, reqId, { companyCode, corpCode });
     } catch { /* 무시 */ }
   }
 
-  // 8. 최종 승인 → LEAVE_01이면 ERP 연차 상태 업데이트
+  // 8. 최종 반려 → LEAVE_01이면 ERP 연차 취소
+  if (newStatus === 'REJECTED' && menuId === 'LEAVE_01') {
+    try {
+      const yearSeq      = Number(payloadJson._year_seq ?? 0);
+      const year         = String(payloadJson._year     ?? '');
+      const empCodeLeave = String(payloadJson._emp_code ?? reqEmpCode);
+      if (yearSeq > 0 && year && empCodeLeave) {
+        const cancelParams = new URLSearchParams({
+          proc:   'usp_mobile_cancel_holiday',
+          param1: empCodeLeave,
+          param2: year,
+          param3: String(yearSeq),
+        });
+        await fetch(`${baseUrl}/R2JsonProc.asp?${cancelParams}`).catch(() => null);
+      }
+    } catch { /* 무시 */ }
+  }
+
+  // 8b. 최종 승인 → LEAVE_01이면 ERP 연차 상태 업데이트
   if (newStatus === 'APPROVED' && menuId === 'LEAVE_01') {
     try {
       const yearSeq      = Number(payloadJson._year_seq ?? 0);
@@ -206,11 +231,12 @@ export async function POST(request: NextRequest) {
   // 9. 최종 완료 → 요청자에게 푸시
   if ((newStatus === 'APPROVED' || newStatus === 'REJECTED') && reqEmpCode) {
     const isApproved = newStatus === 'APPROVED';
+    const label = getMenuLabel(menuId || '요청');
     await pushToEmps(
       corpCode,
       [reqEmpCode],
       isApproved ? '승인 완료' : '반려 처리',
-      isApproved ? `${menuId || '요청'}이 최종 승인되었습니다.` : `${menuId || '요청'}이 반려되었습니다.`,
+      isApproved ? `${label} 요청이 최종 승인되었습니다.` : `${label} 요청이 반려되었습니다.`,
       reqId,
     );
   }

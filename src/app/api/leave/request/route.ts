@@ -238,14 +238,16 @@ async function runApprovalFlow({
   await query(
     `CREATE TABLE IF NOT EXISTS netra_apvmng_requests (
        id SERIAL PRIMARY KEY, req_id INTEGER NOT NULL, corp_code VARCHAR(50),
-       emp_code VARCHAR(50) NOT NULL, menu_id VARCHAR(50), year VARCHAR(4),
+       emp_code VARCHAR(50) NOT NULL, req_emp_name VARCHAR(100),
+       menu_id VARCHAR(50), year VARCHAR(4),
        year_seq INTEGER, created_at TIMESTAMPTZ DEFAULT NOW()
      )`,
   ).catch(() => null);
+  await query(`ALTER TABLE netra_apvmng_requests ADD COLUMN IF NOT EXISTS req_emp_name VARCHAR(100)`).catch(() => null);
   await query(
-    `INSERT INTO netra_apvmng_requests (req_id, corp_code, emp_code, menu_id, year, year_seq)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [reqId, corp_code, emp_code, 'LEAVE_01', startDate.slice(0, 4), yearSeq],
+    `INSERT INTO netra_apvmng_requests (req_id, corp_code, emp_code, req_emp_name, menu_id, year, year_seq)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [reqId, corp_code, emp_code, emp_name || emp_code, 'LEAVE_01', startDate.slice(0, 4), yearSeq],
   ).catch(() => null);
 
   // 4. 단계별 승인자 등록

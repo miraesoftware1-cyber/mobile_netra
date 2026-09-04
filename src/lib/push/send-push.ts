@@ -26,5 +26,8 @@ export async function sendPushNotification(
     vapidPublicKey,
     process.env.VAPID_PRIVATE_KEY ?? "",
   );
-  await webpush.sendNotification(subscription, JSON.stringify(payload));
+  await webpush.sendNotification(subscription, JSON.stringify(payload), {
+    urgency: 'high',
+    TTL: 60,
+  });
 }

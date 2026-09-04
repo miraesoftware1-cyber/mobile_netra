@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, CheckCircle2, Clock, X, Check, XCircle, Loader2 } from "lucide-react";
+import { ChevronLeft, CheckCircle2, Clock, X, Check, XCircle, Loader2, RotateCcw } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 
 type ListItem = {
@@ -108,7 +108,7 @@ function ApprovalInboxContent() {
 
   useEffect(() => {
     fetchList('PENDING');
-    fetchList('APPROVED');
+    fetchList('APPROVED'); // list API가 APPROVED+REJECTED+IN_PROGRESS 통합 반환
   }, [fetchList]);
 
   // 푸쉬 알림 딥링크: ?requestId=...
@@ -261,10 +261,15 @@ function ApprovalInboxContent() {
                   <Check className="w-3.5 h-3.5 text-green-500" />
                   <span className="text-xs text-green-500 font-medium">승인 완료</span>
                 </>
-              ) : (
+              ) : item.STATUS === 'REJECTED' ? (
                 <>
                   <XCircle className="w-3.5 h-3.5 text-red-500" />
                   <span className="text-xs text-red-500 font-medium">반려</span>
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-xs text-orange-400 font-medium">다음 단계 진행중</span>
                 </>
               )}
             </div>
