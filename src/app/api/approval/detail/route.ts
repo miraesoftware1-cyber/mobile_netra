@@ -65,14 +65,19 @@ export async function GET(request: NextRequest) {
   let actions: { STEP_NO: number; EMP_CODE: string; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
   let userAlreadyActed = false;
   try {
-    const { rows } = await query<{ step_no: number; apv_name: string; apv_code: string; action: string; comment: string; created_at: string }>(
-      `SELECT step_no, COALESCE(apv_name, apv_code) AS apv_name, apv_code, action, COALESCE(comment, '') AS comment, created_at
-       FROM netra_apvmng_actions WHERE req_id = $1 ORDER BY created_at ASC`,
+    // ps.user_id 조인: steps.EMP_CODE(USER_ID)와 actions.EMP_CODE(emp_code) 매핑
+    const { rows } = await query<{ step_no: number; apv_name: string; apv_code: string; user_id: string; action: string; comment: string; created_at: string }>(
+      `SELECT a.step_no, COALESCE(a.apv_name, a.apv_code) AS apv_name, a.apv_code,
+              COALESCE(ps.user_id, a.apv_code) AS user_id,
+              a.action, COALESCE(a.comment, '') AS comment, a.created_at
+       FROM netra_apvmng_actions a
+       LEFT JOIN netra_push_subscriptions ps ON ps.emp_code = a.apv_code
+       WHERE a.req_id = $1 ORDER BY a.created_at ASC`,
       [reqId],
     );
     actions = rows.map((r) => ({
       STEP_NO:    r.step_no,
-      EMP_CODE:   r.apv_code,
+      EMP_CODE:   r.user_id,   // USER_ID로 변환 → steps.EMP_CODE와 매핑 가능
       EMP_NAME:   r.apv_name,
       ACTION:     r.action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
       COMMENT:    r.comment,

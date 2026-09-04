@@ -382,7 +382,7 @@ function ApprovalInboxContent() {
                           // 현재 PENDING 단계: steps 배열(ERP 승인자 목록) 기준으로 이름+색상 표시
                           const badges = isCurrentStep && detail.steps.length > 0
                             ? detail.steps.map((s) => {
-                                const act = acts.find(a => a.EMP_CODE === s.EMP_CODE || a.EMP_CODE === s.EMP_CODE);
+                                const act = acts.find(a => a.EMP_CODE === s.EMP_CODE);
                                 const name = s.EMP_NAME || s.EMP_CODE;
                                 if (act?.ACTION === 'APPROVED') return { name, color: 'green' as const, icon: 'check' as const };
                                 if (act?.ACTION === 'REJECTED') return { name, color: 'red' as const, icon: 'x' as const };
