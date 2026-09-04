@@ -53,5 +53,5 @@ export function usePushSubscription() {
         console.error("[push] 구독 등록 실패:", err);
       }
     })();
-  }, [user, canApprove]);
+  }, [user]);
 }
