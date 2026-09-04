@@ -45,8 +45,16 @@
 
 `/api/leave/request`는 ERP에 연차를 저장한 뒤 APVMNG 승인 절차 설정을 확인합니다.
 
-- **절차 설정 있음 (`LEAVE_01`)**: `/api/approval/request`를 호출해 승인 요청을 생성하고 1단계 승인자에게 푸시 알림을 보냅니다.
+- **절차 설정 있음 (`LEAVE_01`)**: 승인 요청을 생성하고 1단계 승인자에게 푸시 알림을 보냅니다. 생성된 `req_id`는 PG `netra_apvmng_requests`에 저장합니다.
 - **절차 설정 없음**: 기존 방식대로 부서장(`manage_dpt_codes` 기준)에게 직접 푸시 알림을 보냅니다.
+
+## 휴가 취소 시 승인 요청 연동
+
+`/api/leave/cancel`은 ERP 연차 취소 후 연동된 승인 요청도 자동으로 취소합니다.
+
+1. `netra_apvmng_requests`에서 `(emp_code, year, year_seq)`로 `req_id` 조회
+2. `usp_mobile_apvmng_set_step`으로 ERP 승인 요청 상태를 `CANCELLED`로 변경
+3. PG `netra_apvmng_actions` / `netra_apvmng_requests` 정리
 
 승인 절차는 APVMNG_02에서 설정합니다. 자세한 내용은 [승인 관리 모듈](./approval.md)을 참고하세요.
 

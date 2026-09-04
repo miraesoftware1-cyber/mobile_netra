@@ -15,6 +15,7 @@ Next.js 기반 모바일 ERP 동반 앱 (연차/휴가, 지출결의, 일정관�
 | [modules/expense.md](./modules/expense.md) | 지출결의 모듈 |
 | [modules/schedule.md](./modules/schedule.md) | 일정관리 모듈 |
 | [modules/daily-worker.md](./modules/daily-worker.md) | 일용직 인사정보 모듈 |
+| [modules/approval.md](./modules/approval.md) | 승인 관리 모듈 (APVMNG) |
 
 ## 빠른 참조
 

@@ -37,6 +37,7 @@ src/
       schedule/         # 일정 API
       daily-worker/     # 일용직 API
       menu-visibility/  # 메뉴 권한 API
+      approval/         # 승인 관리 API (list / detail / action / process / emp-search)
 
   features/             # 도메인별 기능 모듈
     auth/               # 인증 상태(Zustand) + 로그인 폼
@@ -61,13 +62,27 @@ src/
 ## ERP 연동 구조
 
 ```
-클라이언트 → Next.js API Route → ERP R2JsonProc.asp
+클라이언트 → Next.js API Route → ERP R2JsonProc.asp (GET)
+                               → ERP R2JsonProc_update_holiday.asp (POST, 연차 상태 갱신)
 ```
 
 모든 ERP 데이터는 서버 사이드 API Route를 통해 프록시됩니다.  
 ERP 호출 패턴: `R2JsonProc.asp?proc=<프로시저명>&param1=<파라미터>`
 
 회사 코드로 ERP 서버 URL을 조회하는 로직은 `src/lib/erp/resolve-company-erp-base-url.ts`에 있습니다.
+
+> **R2JsonProc.asp 제약**: SELECT / INSERT(일부 테이블) 는 정상 동작하나, `TB_MOBILE_APVMNG_ACTION`에 대한 INSERT는 ASP 레벨에서 HTTP 500을 반환합니다. 이 경우 PostgreSQL로 우회합니다.
+
+## PostgreSQL (자체 DB)
+
+ERP와 별도로 모바일 앱 전용 데이터를 저장하는 PostgreSQL 데이터베이스입니다.  
+연결 설정: `src/lib/db/postgres.ts`
+
+| 테이블 | 설명 |
+|--------|------|
+| `netra_push_subscriptions` | 푸시 알림 구독 정보 (Web Push) |
+| `netra_apvmng_actions` | 승인/반려 처리 이력 (ERP INSERT 우회) |
+| `netra_apvmng_requests` | 연차 신청 ↔ 승인 요청 req_id 매핑 (취소 연동용) |
 
 ## 상태 관리
 

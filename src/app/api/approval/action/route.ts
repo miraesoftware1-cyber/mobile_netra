@@ -41,12 +41,15 @@ async function ensureActionsTable() {
   `);
 }
 
-async function pushToEmps(corpCode: string, empCodes: string[], title: string, body: string, reqId: number) {
+async function pushToEmps(
+  corpCode: string, empCodes: string[], title: string, body: string, reqId: number,
+  approvalMeta?: { companyCode: string; corpCode: string },
+) {
   if (empCodes.length === 0) return;
   try {
     const placeholders = empCodes.map((_, i) => `$${i + 2}`).join(',');
-    const { rows } = await query<{ subscription: webpush.PushSubscription }>(
-      `SELECT subscription FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
+    const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+      `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
       [corpCode, ...empCodes],
     );
     await Promise.allSettled(
@@ -56,6 +59,15 @@ async function pushToEmps(corpCode: string, empCodes: string[], title: string, b
           body,
           url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
           tag: `approval-${reqId}`,
+          ...(approvalMeta ? {
+            approvalAction: {
+              reqId,
+              companyCode: approvalMeta.companyCode,
+              corpCode:    approvalMeta.corpCode,
+              empCode:     row.emp_code,
+              empName:     '',
+            },
+          } : {}),
         }),
       ),
     );
@@ -169,7 +181,7 @@ export async function POST(request: NextRequest) {
       const nextEmpCodes: string[] = (apvData?.items ?? [])
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
-      await pushToEmps(corpCode, nextEmpCodes, `${menuId || '승인'} 요청 — ${nextStepNo}단계`, `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`, reqId);
+      await pushToEmps(corpCode, nextEmpCodes, `${menuId || '승인'} 요청 — ${nextStepNo}단계`, `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`, reqId, { companyCode, corpCode });
     } catch { /* 무시 */ }
   }
 

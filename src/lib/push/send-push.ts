@@ -1,10 +1,19 @@
 import webpush from "web-push";
 
+export interface PushApprovalAction {
+  reqId:       number;
+  companyCode: string;
+  corpCode:    string;
+  empCode:     string;
+  empName:     string;
+}
+
 export interface PushPayload {
-  title: string;
-  body: string;
-  url?: string;
-  tag?: string;
+  title:          string;
+  body:           string;
+  url?:           string;
+  tag?:           string;
+  approvalAction?: PushApprovalAction;  // 있으면 알림에 승인/반려 버튼 추가
 }
 
 export async function sendPushNotification(

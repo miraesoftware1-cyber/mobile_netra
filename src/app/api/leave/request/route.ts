@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
   // 승인 절차 및 푸시 (타임아웃 적용으로 hang 방지)
   try {
     await runApprovalFlow({
-      baseUrl, corp_code, dpt_code, emp_code, emp_name,
+      baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
       leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
     });
   } catch (err) {
@@ -142,10 +142,10 @@ function fetchWithTimeout(url: string, options?: RequestInit, ms = 5000): Promis
 }
 
 async function runApprovalFlow({
-  baseUrl, corp_code, dpt_code, emp_code, emp_name,
+  baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
   leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
 }: {
-  baseUrl: string; corp_code: string; dpt_code: string;
+  baseUrl: string; companyCode: string; corp_code: string; dpt_code: string;
   emp_code: string; emp_name: string; leaveTypeCode: string; leaveTypeName: string;
   appliedDate: string; startDate: string; endDate: string; usedDays: number;
   reason: string; note: string; yearSeq: number;
@@ -268,8 +268,8 @@ async function runApprovalFlow({
   if (step1EmpCodes.length === 0) return;
 
   const placeholders = step1EmpCodes.map((_, i) => `$${i + 2}`).join(',');
-  const { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
-    `SELECT subscription FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
+  const { rows: subs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+    `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
     [corp_code, ...step1EmpCodes],
   );
   const msgTitle = step1?.messageTitle ?? '연차 신청 알림';
@@ -283,6 +283,13 @@ async function runApprovalFlow({
         body: msgBody,
         url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
         tag: `approval-${reqId}`,
+        approvalAction: {
+          reqId,
+          companyCode,
+          corpCode: corp_code,
+          empCode:  row.emp_code,
+          empName:  '',
+        },
       }),
     ),
   );
