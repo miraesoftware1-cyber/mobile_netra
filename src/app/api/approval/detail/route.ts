@@ -46,9 +46,20 @@ export async function GET(request: NextRequest) {
     param1: reqId,
     param2: String(currentStep),
   });
-  const apvRes = await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
-  const apvData = await apvRes?.json().catch(() => null);
-  const stepApprovers: { EMP_CODE: string; THRESHOLD?: number }[] = apvData?.items ?? [];
+  // 현재 단계 THRESHOLD 조회 (step_state SP 사용 — step_approvers에는 THRESHOLD 없음)
+  const stateParams = new URLSearchParams({
+    proc:   'usp_mobile_apvmng_step_state',
+    param1: reqId,
+    param2: userId || empCode,
+  });
+  const [apvRes, stateRes] = await Promise.all([
+    fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null),
+    fetch(`${baseUrl}/R2JsonProc.asp?${stateParams}`, { cache: 'no-store' }).catch(() => null),
+  ]);
+  const apvData   = await apvRes?.json().catch(() => null);
+  const stateData = await stateRes?.json().catch(() => null);
+  const stepApprovers: { EMP_CODE: string }[] = apvData?.items ?? [];
+  const threshold: number = Number(stateData?.items?.[0]?.THRESHOLD ?? 1);
 
   // PG에서 실제 승인/반려 이력 조회 + 현재 단계 처리 여부 확인
   let actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
@@ -83,12 +94,13 @@ export async function GET(request: NextRequest) {
     payload:     (() => { try { return JSON.parse(row.PAYLOAD_JSON); } catch { return {}; } })(),
     procSnapshot: {},
     userAlreadyActed,
+    threshold,
     steps:       stepApprovers.map((r) => ({
       STEP_NO:   currentStep,
       APV_TYPE:  '',
       EMP_CODE:  r.EMP_CODE,
       EMP_NAME:  '',
-      THRESHOLD: Number(r.THRESHOLD ?? 1),
+      THRESHOLD: threshold,
     })),
     actions,
   });

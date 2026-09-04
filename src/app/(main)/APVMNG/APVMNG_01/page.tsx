@@ -35,6 +35,7 @@ type DetailData = {
     endMessage?: { title?: string; body?: string; buttons?: { id: string; name: string; action: string }[] };
     steps?: { stepNo: number; messageTitle?: string; messageBody?: string }[];
   };
+  threshold: number;
   steps: { STEP_NO: number; APV_TYPE: string; EMP_CODE: string; EMP_NAME: string; THRESHOLD: number }[];
   actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[];
   userAlreadyActed: boolean;
@@ -370,7 +371,7 @@ function ApprovalInboxContent() {
                         }
                         return Array.from(stepsMap.entries()).sort(([a], [b]) => a - b).map(([stepNo, acts]) => {
                           const isCurrentStep = stepNo === detail.currentStep;
-                          const threshold = isCurrentStep ? (detail.steps[0]?.THRESHOLD ?? 1) : null;
+                          const threshold = isCurrentStep ? (detail.threshold || 1) : null;
                           const approvedCnt = acts.filter(a => a.ACTION === 'APPROVED').length;
                           const pendingCnt = threshold != null ? Math.max(0, threshold - approvedCnt) : 0;
                           const comments = acts.filter(a => a.COMMENT);
