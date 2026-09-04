@@ -67,7 +67,9 @@ export async function GET(request: NextRequest) {
   try {
     // ps.user_id 조인: steps.EMP_CODE(USER_ID)와 actions.EMP_CODE(emp_code) 매핑
     const { rows } = await query<{ step_no: number; apv_name: string; apv_code: string; user_id: string; action: string; comment: string; created_at: string }>(
-      `SELECT a.step_no, COALESCE(a.apv_name, a.apv_code) AS apv_name, a.apv_code,
+      `SELECT a.step_no,
+              COALESCE(NULLIF(a.apv_name, ''), ps.user_id, a.apv_code) AS apv_name,
+              a.apv_code,
               COALESCE(ps.user_id, a.apv_code) AS user_id,
               a.action, COALESCE(a.comment, '') AS comment, a.created_at
        FROM netra_apvmng_actions a

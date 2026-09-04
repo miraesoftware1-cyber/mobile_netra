@@ -136,11 +136,39 @@ export async function POST(request: NextRequest) {
   console.log('[action] PG insert done');
 
   // 4. 다음 상태 결정
-  let newStatus  = status;
-  let nextStepNo = 0;
+  let newStatus   = status;
+  let nextStepNo  = 0;
+  let needSetStep = false;
 
   if (erpAction === 'REJECT') {
-    newStatus = 'REJECTED';
+    // 즉시 반려가 아니라, "남은 인원이 threshold 달성 불가능"할 때만 최종 반려
+    const apvListData = await erpGet(baseUrl, 'usp_mobile_apvmng_step_approvers', {
+      param1: String(reqId),
+      param2: String(curStep),
+    });
+    const totalApprovers = (apvListData?.items?.length) || 1;
+
+    const [{ rows: rejRows }, { rows: apvRows }] = await Promise.all([
+      query<{ cnt: string }>(
+        `SELECT COUNT(*)::text AS cnt FROM netra_apvmng_actions WHERE req_id=$1 AND step_no=$2 AND action='REJECT'`,
+        [reqId, curStep],
+      ),
+      query<{ cnt: string }>(
+        `SELECT COUNT(*)::text AS cnt FROM netra_apvmng_actions WHERE req_id=$1 AND step_no=$2 AND action='APPROVE'`,
+        [reqId, curStep],
+      ),
+    ]);
+    const rejCnt    = Number(rejRows[0]?.cnt ?? 0); // PG insert 후라 현재 반려 포함
+    const apvCntNow = Number(apvRows[0]?.cnt ?? 0);
+    const remaining = totalApprovers - rejCnt - apvCntNow; // 아직 미처리 인원
+    console.log('[action] reject: total:', totalApprovers, 'rej:', rejCnt, 'apv:', apvCntNow, 'remaining:', remaining, 'threshold:', threshold);
+
+    if (apvCntNow + remaining < threshold) {
+      // 남은 인원이 모두 승인해도 threshold 불가 → 최종 반려
+      newStatus   = 'REJECTED';
+      needSetStep = true;
+    }
+    // else: PENDING 유지 (다른 인원이 아직 threshold 달성 가능)
   } else {
     const { rows: approvals } = await query<{ cnt: string }>(
       `SELECT COUNT(*)::text AS cnt FROM netra_apvmng_actions WHERE req_id=$1 AND step_no=$2 AND action='APPROVE'`,
@@ -149,6 +177,7 @@ export async function POST(request: NextRequest) {
     const apvCnt = Number(approvals[0]?.cnt ?? 0);
     console.log('[action] apvCnt:', apvCnt, 'threshold:', threshold);
     if (apvCnt >= threshold) {
+      needSetStep = true;
       if (curStep < totSteps) {
         newStatus  = 'PENDING';
         nextStepNo = curStep + 1;
@@ -158,13 +187,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 5. ERP 상태 UPDATE (UPDATE only SP)
-  const setStepData = await erpGet(baseUrl, 'usp_mobile_apvmng_set_step', {
-    param1: String(reqId),
-    param2: newStatus,
-    param3: String(nextStepNo > 0 ? nextStepNo : curStep),
-  });
-  console.log('[action] set_step Flag:', setStepData?.Flag, 'MSG:', setStepData?.MSG);
+  // 5. ERP 상태 UPDATE — 상태 변경이 있을 때만 호출
+  let setStepData: Record<string, unknown> | null = null;
+  if (needSetStep) {
+    setStepData = await erpGet(baseUrl, 'usp_mobile_apvmng_set_step', {
+      param1: String(reqId),
+      param2: newStatus,
+      param3: String(nextStepNo > 0 ? nextStepNo : curStep),
+    });
+    console.log('[action] set_step Flag:', setStepData?.Flag, 'MSG:', setStepData?.MSG);
+  }
 
   // 6. 요청자 정보 조회 (푸쉬용)
   let reqEmpCode = '';
