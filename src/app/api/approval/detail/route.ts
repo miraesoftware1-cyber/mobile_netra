@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
+import { query } from '@/lib/db/postgres';
 
 // GET: 승인 요청 상세 조회
 // ?companyCode=...&reqId=...&empCode=...
@@ -46,7 +47,24 @@ export async function GET(request: NextRequest) {
   });
   const apvRes = await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
   const apvData = await apvRes?.json().catch(() => null);
-  const stepApprovers: { EMP_CODE: string }[] = apvData?.items ?? [];
+  const stepApprovers: { EMP_CODE: string; THRESHOLD?: number }[] = apvData?.items ?? [];
+
+  // PG에서 실제 승인/반려 이력 조회
+  let actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
+  try {
+    const { rows } = await query<{ step_no: number; apv_name: string; action: string; comment: string; created_at: string }>(
+      `SELECT step_no, COALESCE(apv_name, apv_code) AS apv_name, action, COALESCE(comment, '') AS comment, created_at
+       FROM netra_apvmng_actions WHERE req_id = $1 ORDER BY created_at ASC`,
+      [reqId],
+    );
+    actions = rows.map((r) => ({
+      STEP_NO:    r.step_no,
+      EMP_NAME:   r.apv_name,
+      ACTION:     r.action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+      COMMENT:    r.comment,
+      CREATED_AT: r.created_at,
+    }));
+  } catch { /* 무시 */ }
 
   return NextResponse.json({
     reqId:       row.REQ_ID,
@@ -59,13 +77,14 @@ export async function GET(request: NextRequest) {
     totalSteps:  Number(row.TOTAL_STEPS ?? 1),
     createdAt:   row.REG_DT ?? '',
     payload:     (() => { try { return JSON.parse(row.PAYLOAD_JSON); } catch { return {}; } })(),
+    procSnapshot: {},
     steps:       stepApprovers.map((r) => ({
       STEP_NO:   currentStep,
       APV_TYPE:  '',
       EMP_CODE:  r.EMP_CODE,
       EMP_NAME:  '',
-      THRESHOLD: 1,
+      THRESHOLD: Number(r.THRESHOLD ?? 1),
     })),
-    actions:     [],
+    actions,
   });
 }
