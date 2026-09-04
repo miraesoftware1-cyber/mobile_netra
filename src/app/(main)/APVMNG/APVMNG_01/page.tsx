@@ -235,13 +235,16 @@ function ApprovalInboxContent() {
               {item.REQ_EMP_NAME}님의 {menuLabel(item.MENU_NAME)} 요청
             </p>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
-                {item.CURRENT_STEP}단계 / {item.TOTAL_STEPS}단계
-                {(item.APPROVE_CNT > 0 || (item.THRESHOLD != null && item.THRESHOLD > 1)) && (
-                  <span className="ml-1 text-primary font-medium">
-                    {item.APPROVE_CNT}{item.THRESHOLD != null && item.THRESHOLD > 1 ? `/${item.THRESHOLD}` : ''}명 승인
-                    {item.APPROVE_NAMES ? ` (${item.APPROVE_NAMES})` : ''}
+                {item.CURRENT_STEP}/{item.TOTAL_STEPS}단계
+                {item.THRESHOLD != null && item.THRESHOLD > 1 && (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                    item.APPROVE_CNT >= item.THRESHOLD
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-primary/10 text-primary'
+                  }`}>
+                    {item.APPROVE_CNT}/{item.THRESHOLD}
                   </span>
                 )}
               </span>
@@ -352,23 +355,58 @@ function ApprovalInboxContent() {
                     ))}
                   </div>
 
-                  {/* 처리 이력 */}
-                  {detail.actions.length > 0 && (
+                  {/* 승인 현황 */}
+                  {(detail.actions.length > 0 || (detail.status === 'PENDING' && detail.steps.length > 0)) && (
                     <div className="flex flex-col gap-2">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">처리 이력</p>
-                      {detail.actions.map((a, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-xl px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            {a.ACTION === 'APPROVED'
-                              ? <Check className="w-4 h-4 text-green-500" />
-                              : <XCircle className="w-4 h-4 text-red-400" />
-                            }
-                            <span className="text-gray-700 font-medium">{a.EMP_NAME}</span>
-                            <span className="text-xs text-gray-400">{a.STEP_NO}단계</span>
-                          </div>
-                          <span className="text-xs text-gray-400">{formatDate(a.CREATED_AT)}</span>
-                        </div>
-                      ))}
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">승인 현황</p>
+                      {(() => {
+                        const stepsMap = new Map<number, typeof detail.actions>();
+                        for (const a of detail.actions) {
+                          if (!stepsMap.has(a.STEP_NO)) stepsMap.set(a.STEP_NO, []);
+                          stepsMap.get(a.STEP_NO)!.push(a);
+                        }
+                        if (!stepsMap.has(detail.currentStep) && detail.status === 'PENDING') {
+                          stepsMap.set(detail.currentStep, []);
+                        }
+                        return Array.from(stepsMap.entries()).sort(([a], [b]) => a - b).map(([stepNo, acts]) => {
+                          const isCurrentStep = stepNo === detail.currentStep;
+                          const threshold = isCurrentStep ? (detail.steps[0]?.THRESHOLD ?? 1) : null;
+                          const approvedCnt = acts.filter(a => a.ACTION === 'APPROVED').length;
+                          const pendingCnt = threshold != null ? Math.max(0, threshold - approvedCnt) : 0;
+                          const comments = acts.filter(a => a.COMMENT);
+                          return (
+                            <div key={stepNo} className="flex flex-col gap-1.5">
+                              {detail.totalSteps > 1 && (
+                                <span className="text-xs text-gray-400">
+                                  {stepNo}단계{threshold != null && threshold > 1 ? ` · ${approvedCnt}/${threshold}명` : ''}
+                                </span>
+                              )}
+                              <div className="flex flex-wrap gap-1.5">
+                                {acts.map((a, i) => (
+                                  <span key={i} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold ${
+                                    a.ACTION === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                                  }`}>
+                                    {a.ACTION === 'APPROVED'
+                                      ? <Check className="w-3 h-3" />
+                                      : <XCircle className="w-3 h-3" />
+                                    }
+                                    {a.EMP_NAME}
+                                  </span>
+                                ))}
+                                {pendingCnt > 0 && (
+                                  <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400">
+                                    <Clock className="w-3 h-3" />
+                                    {pendingCnt}명 대기중
+                                  </span>
+                                )}
+                              </div>
+                              {comments.map((a, i) => (
+                                <p key={i} className="text-xs text-gray-500 pl-1">"{a.COMMENT}"</p>
+                              ))}
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
 
