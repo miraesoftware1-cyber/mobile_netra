@@ -108,6 +108,11 @@ export default function MenuPage() {
       setDbLoaded(true);
       return;
     }
+    // Zustand에 이미 캐시된 데이터가 있으면 즉시 표시
+    if (storeItems.length > 0) {
+      setDbLoaded(true);
+      return;
+    }
     const params = new URLSearchParams({ companyCode, userId, userType });
     fetch(`/api/menu-visibility?${params.toString()}`)
       .then((r) => r.json())

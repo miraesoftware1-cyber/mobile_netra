@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { query } from "@/lib/db/postgres";
 
 export interface PushApprovalAction {
   reqId:       number;
@@ -26,8 +27,20 @@ export async function sendPushNotification(
     vapidPublicKey,
     process.env.VAPID_PRIVATE_KEY ?? "",
   );
-  await webpush.sendNotification(subscription, JSON.stringify(payload), {
-    urgency: 'high',
-    TTL: 60,
-  });
+  try {
+    await webpush.sendNotification(subscription, JSON.stringify(payload), {
+      urgency: 'high',
+      TTL: 60,
+    });
+  } catch (err: unknown) {
+    // 410 Gone / 404 = 구독 만료 → DB에서 자동 삭제
+    const status = (err as { statusCode?: number })?.statusCode;
+    if (status === 410 || status === 404) {
+      await query(
+        `DELETE FROM netra_push_subscriptions WHERE subscription->>'endpoint' = $1`,
+        [subscription.endpoint],
+      ).catch(() => null);
+    }
+    throw err;
+  }
 }

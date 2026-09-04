@@ -82,11 +82,20 @@ export async function GET(request: NextRequest) {
 
   const { baseUrl } = resolved;
 
-  // 1. 활성화된 메뉴 목록 조회
-  const menuRes = await fetch(
+  // 1. 메뉴 목록 + 권한 병렬 조회 (시스템관리자는 권한 조회 불필요)
+  const menuFetch = fetch(
     `${baseUrl}/R2JsonProc.asp?proc=usp_mobile_get_env_mobile_menu&param1=`,
     { cache: "no-store" },
   ).catch(() => null);
+
+  const permFetch = userType !== "S"
+    ? fetch(
+        `${baseUrl}/R2JsonProc.asp?proc=usp_mobile_get_env_mobile_permission&param1=${encodeURIComponent(userId)}`,
+        { cache: "no-store" },
+      ).catch(() => null)
+    : Promise.resolve(null);
+
+  const [menuRes, permRes] = await Promise.all([menuFetch, permFetch]);
 
   if (!menuRes?.ok) return NextResponse.json({ items: null });
 
@@ -121,12 +130,6 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ items: menuData.items, perms: fullPerms });
   }
-
-  // 2. 사용자 권한 조회
-  const permRes = await fetch(
-    `${baseUrl}/R2JsonProc.asp?proc=usp_mobile_get_env_mobile_permission&param1=${encodeURIComponent(userId)}`,
-    { cache: "no-store" },
-  ).catch(() => null);
 
   // 네트워크 자체가 끊긴 경우에만 null 반환 (프론트에서 서버 오류 안내)
   if (!permRes?.ok) return NextResponse.json({ items: null });
