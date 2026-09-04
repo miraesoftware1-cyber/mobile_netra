@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const companyCode = searchParams.get('companyCode') ?? '';
   const reqId       = searchParams.get('reqId') ?? '';
   const empCode     = searchParams.get('empCode') ?? '';
+  const userId      = searchParams.get('userId') ?? '';
 
   if (!companyCode || !reqId || !empCode) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
@@ -49,11 +50,12 @@ export async function GET(request: NextRequest) {
   const apvData = await apvRes?.json().catch(() => null);
   const stepApprovers: { EMP_CODE: string; THRESHOLD?: number }[] = apvData?.items ?? [];
 
-  // PG에서 실제 승인/반려 이력 조회
+  // PG에서 실제 승인/반려 이력 조회 + 현재 단계 처리 여부 확인
   let actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
+  let userAlreadyActed = false;
   try {
-    const { rows } = await query<{ step_no: number; apv_name: string; action: string; comment: string; created_at: string }>(
-      `SELECT step_no, COALESCE(apv_name, apv_code) AS apv_name, action, COALESCE(comment, '') AS comment, created_at
+    const { rows } = await query<{ step_no: number; apv_name: string; apv_code: string; action: string; comment: string; created_at: string }>(
+      `SELECT step_no, COALESCE(apv_name, apv_code) AS apv_name, apv_code, action, COALESCE(comment, '') AS comment, created_at
        FROM netra_apvmng_actions WHERE req_id = $1 ORDER BY created_at ASC`,
       [reqId],
     );
@@ -64,6 +66,8 @@ export async function GET(request: NextRequest) {
       COMMENT:    r.comment,
       CREATED_AT: r.created_at,
     }));
+    // 현재 단계를 이미 처리했으면 버튼 숨김
+    userAlreadyActed = rows.some((r) => r.step_no === currentStep && (r.apv_code === empCode || r.apv_code === userId));
   } catch { /* 무시 */ }
 
   return NextResponse.json({
@@ -78,6 +82,7 @@ export async function GET(request: NextRequest) {
     createdAt:   row.REG_DT ?? '',
     payload:     (() => { try { return JSON.parse(row.PAYLOAD_JSON); } catch { return {}; } })(),
     procSnapshot: {},
+    userAlreadyActed,
     steps:       stepApprovers.map((r) => ({
       STEP_NO:   currentStep,
       APV_TYPE:  '',

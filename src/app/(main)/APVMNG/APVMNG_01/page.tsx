@@ -37,6 +37,7 @@ type DetailData = {
   };
   steps: { STEP_NO: number; APV_TYPE: string; EMP_CODE: string; EMP_NAME: string; THRESHOLD: number }[];
   actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[];
+  userAlreadyActed: boolean;
 };
 
 const MENU_LABEL: Record<string, string> = {
@@ -167,7 +168,7 @@ function ApprovalInboxContent() {
 
   const isPending = detail?.status === 'PENDING';
   const isMyStep = detail ? detail.steps.some((s) => s.STEP_NO === detail.currentStep && (s.EMP_CODE === empCode || s.EMP_CODE === userId)) : false;
-  const canAct = isPending && isMyStep;
+  const canAct = isPending && isMyStep && !detail?.userAlreadyActed;
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">
