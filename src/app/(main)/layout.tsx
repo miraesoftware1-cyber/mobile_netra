@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { useMenuStore } from "@/features/menu/use-menu-store";
@@ -21,12 +21,24 @@ export default function MainLayout({
   const setItems    = useMenuStore((s) => s.setItems);
   const setPerms    = useMenuStore((s) => s.setPerms);
 
-  // user가 null이 되면 즉시 로그인 페이지로 리다이렉트 (로그아웃 시 포함)
+  // persist 스토어가 localStorage에서 복원될 때까지 대기
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setHydrated(true);
+    } else {
+      const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
+      return unsub;
+    }
+  }, []);
+
+  // 하이드레이션 완료 후에만 로그인 체크 (새로고침 시 튕김 방지)
+  useEffect(() => {
+    if (!hydrated) return;
     if (!user) {
       router.replace("/login");
     }
-  }, [user, router]);
+  }, [user, router, hydrated]);
 
   // 어느 페이지에서 새로고침해도, 그리고 앱을 다시 열어도 권한이 항상 최신 상태 유지
   useEffect(() => {

@@ -76,6 +76,8 @@ function groupIcon(menuId: string): LucideIcon {
 
 // ─── 공통 ────────────────────────────────────────────────────────────────────
 
+const MENU_COLLAPSE_KEY = "menu-collapsed-groups";
+
 type Section = {
   key: string;
   label: string;
@@ -97,7 +99,12 @@ export default function MenuPage() {
   const setMenuStoreItems = useMenuStore((s) => s.setItems);
   const setMenuStorePerms = useMenuStore((s) => s.setPerms);
   const [dbLoaded, setDbLoaded] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = sessionStorage.getItem(MENU_COLLAPSE_KEY);
+      return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    } catch { return {}; }
+  });
 
   useEffect(() => {
     // userId 없으면 API를 부를 수 없으므로 바로 "로드 완료, 빈 목록"으로 처리
@@ -220,7 +227,11 @@ export default function MenuPage() {
   }, [storeItems, storePerms, dbLoaded]);
 
   function toggleGroup(key: string) {
-    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { sessionStorage.setItem(MENU_COLLAPSE_KEY, JSON.stringify(next)); } catch { /* 무시 */ }
+      return next;
+    });
   }
 
   return (

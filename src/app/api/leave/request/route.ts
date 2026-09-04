@@ -260,13 +260,15 @@ async function runApprovalFlow({
       param4: apv.empCode,
       param5: String(apv.threshold),
     });
-    await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' });
+    const apvRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' });
+    const apvData = await apvRes?.json().catch(() => null);
+    console.log('[approval-flow] step_apv_add', apv.empCode, apv.apvType, 'Flag:', apvData?.Flag, 'MSG:', apvData?.MSG);
   }
 
   // 5. 1단계 승인자에게 푸시
   const step1 = config.steps[0];
   const step1EmpCodes = stepApprovers.filter((a) => a.stepNo === 1).map((a) => a.empCode);
-  console.log('[approval-flow] step1EmpCodes:', step1EmpCodes);
+  console.log('[approval-flow] step1EmpCodes:', step1EmpCodes, 'corp_code:', corp_code);
   if (step1EmpCodes.length === 0) return;
 
   const placeholders = step1EmpCodes.map((_, i) => `$${i + 2}`).join(',');
@@ -274,6 +276,7 @@ async function runApprovalFlow({
     `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
     [corp_code, ...step1EmpCodes],
   );
+  console.log('[approval-flow] push subs found:', subs.length, 'for empCodes:', step1EmpCodes);
   const msgTitle = step1?.messageTitle ?? '연차 신청 알림';
   const msgBody = (step1?.messageBody ?? '{requesterName}님이 연차를 신청했습니다.')
     .replace('{requesterName}', emp_name || emp_code)
