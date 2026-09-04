@@ -11,6 +11,8 @@ type ListItem = {
   REQ_EMP_NAME: string;
   CURRENT_STEP: number;
   TOTAL_STEPS: number;
+  THRESHOLD: number | null;
+  APPROVE_CNT: number;
   STATUS: string;
   CREATED_AT: string;
 };
@@ -234,6 +236,11 @@ function ApprovalInboxContent() {
               <span className="text-xs text-gray-500 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {item.CURRENT_STEP}단계 / {item.TOTAL_STEPS}단계
+                {(item.APPROVE_CNT > 0 || (item.THRESHOLD != null && item.THRESHOLD > 1)) && (
+                  <span className="ml-1 text-primary font-medium">
+                    ({item.APPROVE_CNT}{item.THRESHOLD != null && item.THRESHOLD > 1 ? `/${item.THRESHOLD}` : ''}명 승인)
+                  </span>
+                )}
               </span>
               <span className="text-xs text-primary font-medium">상세보기 →</span>
             </div>

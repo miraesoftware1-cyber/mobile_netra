@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
-import { useMenuStore } from "@/features/menu/use-menu-store";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -17,11 +16,10 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 
 export function usePushSubscription() {
   const user = useAuthStore((s) => s.user);
-  const perms = useMenuStore((s) => s.perms);
-  const canApprove = perms["LEAVE_02"]?.approve ?? false;
+  // 승인 권한 여부 무관하게 구독 — 그룹 멤버·신청자 모두 알림 수신 필요
 
   useEffect(() => {
-    if (!user || !canApprove) return;
+    if (!user) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
     (async () => {
