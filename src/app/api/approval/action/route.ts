@@ -17,6 +17,7 @@ const actionSchema = z.object({
   corpCode:    z.string().min(1),
   reqId:       z.number().int().min(1),
   empCode:     z.string().min(1),
+  userId:      z.string().default(''),
   empName:     z.string().default(''),
   action:      z.enum(['APPROVED', 'REJECTED']),
   comment:     z.string().default(''),
@@ -90,9 +91,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
   }
 
-  const { companyCode, corpCode, reqId, empCode, empName, action, comment } = parsed.data;
+  const { companyCode, corpCode, reqId, empCode, userId, empName, action, comment } = parsed.data;
+  const erpId = userId || empCode; // ERP는 USER_ID로 등록, PG는 empCode 사용
   const erpAction = action === 'APPROVED' ? 'APPROVE' : 'REJECT';
-  console.log('[action] start reqId:', reqId, 'empCode:', empCode, 'action:', erpAction);
+  console.log('[action] start reqId:', reqId, 'erpId:', erpId, 'action:', erpAction);
 
   const resolved = await resolveCompanyErpBaseUrl(companyCode);
   if (resolved.status !== 'ok') {
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
   // 1. 현재 상태 조회 (ERP SELECT only SP)
   const stateData = await erpGet(baseUrl, 'usp_mobile_apvmng_step_state', {
     param1: String(reqId),
-    param2: empCode,
+    param2: erpId,
   });
   console.log('[action] step_state Flag:', stateData?.Flag, 'items:', stateData?.items?.length);
   const stateRow = stateData?.items?.[0];
@@ -185,10 +187,26 @@ export async function POST(request: NextRequest) {
         param1: String(reqId),
         param2: String(nextStepNo),
       });
-      const nextEmpCodes: string[] = (apvData?.items ?? [])
+      const nextUserIds: string[] = (apvData?.items ?? [])
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
-      await pushToEmps(corpCode, nextEmpCodes, `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`, `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`, reqId, { companyCode, corpCode });
+      // 다음 단계 승인자는 USER_ID로 등록되어 있으므로 user_id 컬럼으로 조회
+      if (nextUserIds.length > 0) {
+        const ph = nextUserIds.map((_, i) => `$${i + 2}`).join(',');
+        const { rows: nextSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+          `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND user_id IN (${ph})`,
+          [corpCode, ...nextUserIds],
+        );
+        await Promise.allSettled(nextSubs.map((row) =>
+          sendPushNotification(row.subscription, {
+            title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,
+            body: `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`,
+            url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
+            tag: `approval-${reqId}`,
+            approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' },
+          }),
+        ));
+      }
     } catch { /* 무시 */ }
   }
 

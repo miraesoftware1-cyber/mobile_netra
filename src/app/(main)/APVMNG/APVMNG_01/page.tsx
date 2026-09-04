@@ -82,6 +82,7 @@ function ApprovalInboxContent() {
   const corpCode    = useAuthStore((s) => s.user?.corp_code ?? '');
   const empCode     = useAuthStore((s) => s.user?.emp_code ?? '');
   const empName     = useAuthStore((s) => s.user?.emp_name ?? '');
+  const userId      = useAuthStore((s) => s.user?.user_id ?? '');
 
   const [tab, setTab] = useState<'pending' | 'completed'>('pending');
   const [pendingItems, setPendingItems] = useState<ListItem[]>([]);
@@ -97,14 +98,14 @@ function ApprovalInboxContent() {
     if (!companyCode || !empCode) return;
     setListLoading(true);
     try {
-      const res = await fetch(`/api/approval/list?companyCode=${companyCode}&empCode=${empCode}&status=${status}`);
+      const res = await fetch(`/api/approval/list?companyCode=${companyCode}&empCode=${empCode}&userId=${userId}&status=${status}`);
       const data = await res.json();
       if (status === 'PENDING') setPendingItems(data.items ?? []);
       else setCompletedItems(data.items ?? []);
     } finally {
       setListLoading(false);
     }
-  }, [companyCode, empCode]);
+  }, [companyCode, empCode, userId]);
 
   useEffect(() => {
     fetchList('PENDING');
@@ -125,7 +126,7 @@ function ApprovalInboxContent() {
     setDetail(null);
     setComment('');
     try {
-      const res = await fetch(`/api/approval/detail?companyCode=${companyCode}&reqId=${reqId}&empCode=${empCode}`);
+      const res = await fetch(`/api/approval/detail?companyCode=${companyCode}&reqId=${reqId}&empCode=${empCode}&userId=${userId}`);
       const data = await res.json();
       if (res.ok) setDetail(data);
     } finally {
@@ -145,6 +146,7 @@ function ApprovalInboxContent() {
           corpCode,
           reqId: detail.reqId,
           empCode,
+          userId,
           empName,
           action,
           comment,
@@ -161,7 +163,7 @@ function ApprovalInboxContent() {
   }
 
   const isPending = detail?.status === 'PENDING';
-  const isMyStep = detail ? detail.steps.some((s) => s.STEP_NO === detail.currentStep && s.EMP_CODE === empCode) : false;
+  const isMyStep = detail ? detail.steps.some((s) => s.STEP_NO === detail.currentStep && (s.EMP_CODE === empCode || s.EMP_CODE === userId)) : false;
   const canAct = isPending && isMyStep;
 
   return (

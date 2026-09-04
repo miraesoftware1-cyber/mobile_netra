@@ -186,7 +186,7 @@ async function runApprovalFlow({
   if (!config.steps?.length) return;
 
   // 2. 단계별 승인자 resolve
-  const stepApprovers: { stepNo: number; apvType: string; empCode: string; threshold: number }[] = [];
+  const stepApprovers: { stepNo: number; apvType: string; empCode: string; userId?: string; threshold: number }[] = [];
   for (const step of config.steps) {
     if (step.type === 'dept_head') {
       const { rows: heads } = await query<{ emp_code: string }>(
@@ -205,10 +205,10 @@ async function runApprovalFlow({
         const members: Array<{ EMP_CODE: string }> = memberData?.items ?? [];
         console.log('[approval-flow] group expand', m.empCode, '→ members:', members.map(x => x.EMP_CODE));
         if (members.length === 0) {
-          stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: m.empCode, threshold: step.threshold });
+          stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: m.empCode, userId: m.empCode, threshold: step.threshold });
         } else {
           for (const mem of members) {
-            stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: mem.EMP_CODE, threshold: step.threshold });
+            stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: mem.EMP_CODE, userId: mem.EMP_CODE, threshold: step.threshold });
           }
         }
       }
@@ -282,15 +282,32 @@ async function runApprovalFlow({
 
   // 5. 1단계 승인자에게 푸시
   const step1 = config.steps[0];
-  const step1EmpCodes = stepApprovers.filter((a) => a.stepNo === 1).map((a) => a.empCode);
+  const step1Approvers = stepApprovers.filter((a) => a.stepNo === 1);
+  const step1EmpCodes = step1Approvers.map((a) => a.empCode);
   console.log('[approval-flow] step1EmpCodes:', step1EmpCodes, 'corp_code:', corp_code);
   if (step1EmpCodes.length === 0) return;
 
-  const placeholders = step1EmpCodes.map((_, i) => `$${i + 2}`).join(',');
-  const { rows: subs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-    `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
-    [corp_code, ...step1EmpCodes],
-  );
+  // 그룹 멤버는 user_id로, 개인/부서장은 emp_code로 구독 조회
+  const groupUserIds = step1Approvers.filter((a) => a.userId).map((a) => a.userId as string);
+  const individualEmpCodes = step1Approvers.filter((a) => !a.userId).map((a) => a.empCode);
+
+  let subs: { subscription: webpush.PushSubscription; emp_code: string }[] = [];
+  if (groupUserIds.length > 0) {
+    const ph = groupUserIds.map((_, i) => `$${i + 2}`).join(',');
+    const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+      `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND user_id IN (${ph})`,
+      [corp_code, ...groupUserIds],
+    );
+    subs = [...subs, ...rows];
+  }
+  if (individualEmpCodes.length > 0) {
+    const ph = individualEmpCodes.map((_, i) => `$${i + 2}`).join(',');
+    const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+      `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${ph})`,
+      [corp_code, ...individualEmpCodes],
+    );
+    subs = [...subs, ...rows];
+  }
   console.log('[approval-flow] push subs found:', subs.length, 'for empCodes:', step1EmpCodes);
   const msgTitle = step1?.messageTitle ?? '연차 신청 알림';
   const msgBody = (step1?.messageBody ?? '{requesterName}님이 연차를 신청했습니다.')

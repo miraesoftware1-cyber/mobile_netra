@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { query } from '@/lib/db/postgres';
 
-async function fetchErpList(baseUrl: string, empCode: string, status: string) {
+async function fetchErpList(baseUrl: string, erpId: string, status: string) {
   const params = new URLSearchParams({
     proc: 'usp_mobile_apvmng_request_list',
-    param1: empCode,
+    param1: erpId,
     param2: status,
   });
   const res = await fetch(`${baseUrl}/R2JsonProc.asp?${params}`, { cache: 'no-store' }).catch(() => null);
@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const companyCode = searchParams.get('companyCode') ?? '';
   const empCode     = searchParams.get('empCode') ?? '';
+  const userId      = searchParams.get('userId') ?? '';
   const status      = searchParams.get('status') ?? 'PENDING';
+  // ERP는 USER_ID로 조회 (그룹 승인자 등록 시 USER_ID 사용), PG는 empCode로 조회
+  const erpId = userId || empCode;
 
   if (!companyCode || !empCode) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
@@ -52,15 +55,15 @@ export async function GET(request: NextRequest) {
 
   if (status === 'PENDING') {
     // ERP PENDING 목록에서 이미 처리한 항목 제외
-    const items = await fetchErpList(baseUrl, empCode, 'PENDING');
+    const items = await fetchErpList(baseUrl, erpId, 'PENDING');
     const filtered = items.filter((item) => !actedReqIds.has(item.REQ_ID));
     return NextResponse.json({ items: filtered });
   }
 
   // status === 'APPROVED': 처리완료 탭 (APPROVED + REJECTED + 내가 처리한 진행중)
   const [approvedItems, rejectedItems] = await Promise.all([
-    fetchErpList(baseUrl, empCode, 'APPROVED'),
-    fetchErpList(baseUrl, empCode, 'REJECTED'),
+    fetchErpList(baseUrl, erpId, 'APPROVED'),
+    fetchErpList(baseUrl, erpId, 'REJECTED'),
   ]);
   const erpItems = [...approvedItems, ...rejectedItems];
   const erpReqIds = new Set(erpItems.map((i) => i.REQ_ID));

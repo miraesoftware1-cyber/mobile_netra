@@ -46,6 +46,7 @@ export function usePushSubscription() {
           body: JSON.stringify({
             subscription: sub.toJSON(),
             emp_code: user.emp_code,
+            user_id: user.user_id,
             corp_code: user.corp_code,
             manage_dpt_codes: user.manage_dpt_codes,
           }),
