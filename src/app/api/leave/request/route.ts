@@ -14,6 +14,7 @@ const requestSchema = z.object({
   dpt_code: z.string().default(''),
   year: z.string().regex(/^\d{4}$/),
   leaveTypeCode: z.string().min(1),
+  leaveTypeName: z.string().default(''),
   appliedDate: z.string().regex(/^\d{8}$/),
   startDate: z.string().regex(/^\d{8}$/),
   endDate: z.string().regex(/^\d{8}$/),
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     dpt_code,
     year,
     leaveTypeCode,
+    leaveTypeName,
     appliedDate,
     startDate,
     endDate,
@@ -118,28 +120,41 @@ export async function POST(request: NextRequest) {
 
   const yearSeq: number = Number((insertData.items as Array<Record<string, unknown>>)?.[0]?.YEAR_SEQ ?? 0);
 
-  // 승인 절차 및 푸시는 응답과 무관하게 백그라운드로 처리
-  runApprovalFlow({
-    baseUrl, corp_code, dpt_code, emp_code, emp_name,
-    leaveTypeCode, startDate, endDate, usedDays, reason, note, yearSeq,
-  }).catch((err) => console.error('[leave/request] approval flow 실패:', err));
+  // 승인 절차 및 푸시 (타임아웃 적용으로 hang 방지)
+  try {
+    await runApprovalFlow({
+      baseUrl, corp_code, dpt_code, emp_code, emp_name,
+      leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
+    });
+  } catch (err) {
+    console.error('[leave/request] approval flow 실패:', err);
+  }
 
   return NextResponse.json({ success: true, message: insertData.MSG });
 }
 
+function fetchWithTimeout(url: string, options?: RequestInit, ms = 5000): Promise<Response | null> {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .catch(() => null)
+    .finally(() => clearTimeout(tid));
+}
+
 async function runApprovalFlow({
   baseUrl, corp_code, dpt_code, emp_code, emp_name,
-  leaveTypeCode, startDate, endDate, usedDays, reason, note, yearSeq,
+  leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
 }: {
   baseUrl: string; corp_code: string; dpt_code: string;
-  emp_code: string; emp_name: string; leaveTypeCode: string;
-  startDate: string; endDate: string; usedDays: number;
+  emp_code: string; emp_name: string; leaveTypeCode: string; leaveTypeName: string;
+  appliedDate: string; startDate: string; endDate: string; usedDays: number;
   reason: string; note: string; yearSeq: number;
 }) {
   // 1. 승인 절차 설정 조회
   const procParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' });
-  const procRes = await fetch(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' }).catch(() => null);
+  const procRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' });
   const procRaw = procRes?.ok ? await procRes.json().catch(() => null) : null;
+  console.log('[approval-flow] process_get Flag:', procRaw?.Flag, 'has CONFIG_JSON:', !!procRaw?.items?.[0]?.CONFIG_JSON);
 
   // 절차 설정 없으면 기존 부서장 직접 푸시
   if (!procRaw || String(procRaw.Flag) !== '0' || !procRaw.items?.[0]?.CONFIG_JSON) {
@@ -192,7 +207,8 @@ async function runApprovalFlow({
   // 3. 승인 요청 생성
   const payloadJson = {
     신청자: emp_name || emp_code,
-    휴가종류: leaveTypeCode,
+    휴가종류: leaveTypeName || leaveTypeCode,
+    신청일자: `${appliedDate.slice(0, 4)}.${appliedDate.slice(4, 6)}.${appliedDate.slice(6, 8)}`,
     시작일: startDate,
     종료일: endDate,
     일수: `${usedDays}일`,
@@ -208,14 +224,29 @@ async function runApprovalFlow({
     param2: emp_code,
     param3: emp_name,
     param4: JSON.stringify(payloadJson),
-    param5: JSON.stringify(config),
+    param5: '{}',  // PROC_SNAPSHOT — 이력용, URL 길이 제한으로 생략
     param6: String(config.steps.length),
   });
-  const createRes = await fetch(`${baseUrl}/R2JsonProc.asp?${createParams}`, { cache: 'no-store' }).catch(() => null);
+  const createRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${createParams}`, { cache: 'no-store' });
   const createData = await createRes?.json().catch(() => null);
   const reqId: number = createData?.items?.[0]?.REQ_ID ?? 0;
 
+  console.log('[approval-flow] request_create Flag:', createData?.Flag, 'REQ_ID:', reqId);
   if (!reqId || String(createData?.Flag) !== '0') return;
+
+  // req_id 매핑 PG 저장 (취소 연동용)
+  await query(
+    `CREATE TABLE IF NOT EXISTS netra_apvmng_requests (
+       id SERIAL PRIMARY KEY, req_id INTEGER NOT NULL, corp_code VARCHAR(50),
+       emp_code VARCHAR(50) NOT NULL, menu_id VARCHAR(50), year VARCHAR(4),
+       year_seq INTEGER, created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+  ).catch(() => null);
+  await query(
+    `INSERT INTO netra_apvmng_requests (req_id, corp_code, emp_code, menu_id, year, year_seq)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [reqId, corp_code, emp_code, 'LEAVE_01', startDate.slice(0, 4), yearSeq],
+  ).catch(() => null);
 
   // 4. 단계별 승인자 등록
   for (const apv of stepApprovers) {
@@ -227,12 +258,13 @@ async function runApprovalFlow({
       param4: apv.empCode,
       param5: String(apv.threshold),
     });
-    await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
+    await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' });
   }
 
   // 5. 1단계 승인자에게 푸시
   const step1 = config.steps[0];
   const step1EmpCodes = stepApprovers.filter((a) => a.stepNo === 1).map((a) => a.empCode);
+  console.log('[approval-flow] step1EmpCodes:', step1EmpCodes);
   if (step1EmpCodes.length === 0) return;
 
   const placeholders = step1EmpCodes.map((_, i) => `$${i + 2}`).join(',');

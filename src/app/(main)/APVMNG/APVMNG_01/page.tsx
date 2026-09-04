@@ -36,14 +36,34 @@ type DetailData = {
   actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[];
 };
 
+const MENU_LABEL: Record<string, string> = {
+  LEAVE_01: '연차/휴가',
+  EXP_01:   '지출결의',
+  SCH_01:   '일정',
+};
+function menuLabel(id: string) { return MENU_LABEL[id] ?? id; }
+
+const HIDDEN_PAYLOAD_KEYS = new Set(['_year', '_year_seq', '_emp_code']);
+
+function formatPayloadValue(key: string, value: string): string {
+  // 8자리 숫자 → 날짜 포맷
+  if (/^\d{8}$/.test(value)) {
+    return `${value.slice(0, 4)}.${value.slice(4, 6)}.${value.slice(6, 8)}`;
+  }
+  return value;
+}
+
 function payloadToFields(payload: Record<string, unknown>): PayloadField[] {
-  return Object.entries(payload).map(([k, v]) => ({ label: k, value: String(v ?? '') }));
+  return Object.entries(payload)
+    .filter(([k]) => !HIDDEN_PAYLOAD_KEYS.has(k))
+    .map(([k, v]) => ({ label: k, value: formatPayloadValue(k, String(v ?? '')) }));
 }
 
 function formatDate(iso: string): string {
   if (!iso) return '';
   try {
     const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
     const now = new Date();
     const diff = now.getTime() - d.getTime();
     if (diff < 86400000 && d.getDate() === now.getDate()) {
@@ -198,13 +218,15 @@ function ApprovalInboxContent() {
             className="w-full bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                {item.MENU_NAME}
-              </span>
+              {item.MENU_NAME ? (
+                <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {menuLabel(item.MENU_NAME)}
+                </span>
+              ) : <span />}
               <span className="text-xs text-gray-400">{formatDate(item.CREATED_AT)}</span>
             </div>
             <p className="font-semibold text-gray-900 text-sm">
-              {item.REQ_EMP_NAME}님의 {item.MENU_NAME}
+              {item.REQ_EMP_NAME}님의 {menuLabel(item.MENU_NAME)} 요청
             </p>
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -223,13 +245,15 @@ function ApprovalInboxContent() {
             className="w-full bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                {item.MENU_NAME}
-              </span>
+              {item.MENU_NAME ? (
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                  {menuLabel(item.MENU_NAME)}
+                </span>
+              ) : <span />}
               <span className="text-xs text-gray-400">{formatDate(item.CREATED_AT)}</span>
             </div>
             <p className="font-semibold text-gray-900 text-sm">
-              {item.REQ_EMP_NAME}님의 {item.MENU_NAME}
+              {item.REQ_EMP_NAME}님의 {menuLabel(item.MENU_NAME)} 요청
             </p>
             <div className="flex items-center gap-1">
               {item.STATUS === 'APPROVED' ? (
@@ -262,14 +286,14 @@ function ApprovalInboxContent() {
         )}
       </div>
 
-      {/* Detail Popup */}
+      {/* Detail Modal */}
       {(detailLoading || detail) && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-end"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4"
           onClick={() => { if (!actionLoading) setDetail(null); }}
         >
           <div
-            className="bg-white w-full rounded-t-2xl max-h-[85vh] flex flex-col"
+            className="bg-white w-full max-w-sm rounded-2xl max-h-[85vh] flex flex-col shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {detailLoading ? (
@@ -278,68 +302,79 @@ function ApprovalInboxContent() {
               </div>
             ) : detail && (
               <>
-                <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">{detail.menuName}</p>
-                    <h2 className="font-bold text-gray-900">{detail.reqEmpName}님의 {detail.menuName}</h2>
+                {/* 헤더 */}
+                <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full self-start">
+                      {menuLabel(detail.menuName || detail.menuId)}
+                    </span>
+                    <h2 className="text-base font-bold text-gray-900 mt-1">
+                      {detail.reqEmpName}님의 요청
+                    </h2>
+                    <p className="text-xs text-gray-400">
+                      {detail.currentStep}단계 / {detail.totalSteps}단계 진행 중
+                    </p>
                   </div>
                   <button
                     onClick={() => setDetail(null)}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 flex-shrink-0 ml-2"
                     disabled={actionLoading}
                   >
-                    <X className="w-5 h-5 text-gray-500" />
+                    <X className="w-5 h-5 text-gray-400" />
                   </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 px-4 py-4 flex flex-col gap-4">
+                <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-4">
                   {/* payload fields */}
-                  <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-3">
+                  <div className="flex flex-col gap-0 divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden">
                     {payloadToFields(detail.payload).map((f) => (
-                      <div key={f.label} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">{f.label}</span>
-                        <span className="font-medium text-gray-900">{f.value}</span>
+                      <div key={f.label} className="flex items-center justify-between px-4 py-3 bg-white">
+                        <span className="text-sm text-gray-500 shrink-0">{f.label}</span>
+                        <span className="text-sm font-semibold text-gray-900 text-right ml-4">{f.value}</span>
                       </div>
                     ))}
                   </div>
 
-                  {/* 진행 단계 */}
-                  <p className="text-xs text-gray-400 text-center">
-                    {detail.currentStep}단계 / {detail.totalSteps}단계 진행 중
-                  </p>
-
                   {/* 처리 이력 */}
                   {detail.actions.length > 0 && (
                     <div className="flex flex-col gap-2">
-                      <p className="text-xs font-semibold text-gray-500">처리 이력</p>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">처리 이력</p>
                       {detail.actions.map((a, i) => (
-                        <div key={i} className="flex items-start justify-between text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-                          <span>{a.STEP_NO}단계 · {a.EMP_NAME} · {a.ACTION === 'APPROVED' ? '승인' : '반려'}</span>
-                          <span className="text-gray-400 ml-2 whitespace-nowrap">{formatDate(a.CREATED_AT)}</span>
+                        <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {a.ACTION === 'APPROVED'
+                              ? <Check className="w-4 h-4 text-green-500" />
+                              : <XCircle className="w-4 h-4 text-red-400" />
+                            }
+                            <span className="text-gray-700 font-medium">{a.EMP_NAME}</span>
+                            <span className="text-xs text-gray-400">{a.STEP_NO}단계</span>
+                          </div>
+                          <span className="text-xs text-gray-400">{formatDate(a.CREATED_AT)}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* 코멘트 입력 (처리 가능한 경우) */}
+                  {/* 코멘트 입력 */}
                   {canAct && (
                     <textarea
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       placeholder="의견을 입력하세요 (선택)"
                       rows={2}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   )}
                 </div>
 
-                <div className="px-4 pb-6 pt-3 border-t border-gray-100 flex gap-2">
+                {/* 버튼 */}
+                <div className="px-5 pb-5 pt-3 border-t border-gray-100 flex gap-2">
                   {canAct ? (
                     <>
                       <button
                         onClick={() => setDetail(null)}
                         disabled={actionLoading}
-                        className="flex-1 py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 active:bg-gray-200"
+                        className="flex-1 py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-600 active:bg-gray-200"
                       >
                         닫기
                       </button>
@@ -361,7 +396,7 @@ function ApprovalInboxContent() {
                   ) : (
                     <button
                       onClick={() => setDetail(null)}
-                      className="flex-1 py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 active:bg-gray-200"
+                      className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-600 active:bg-gray-200"
                     >
                       닫기
                     </button>

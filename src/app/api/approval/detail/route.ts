@@ -18,13 +18,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   }
 
-  const params = new URLSearchParams({
+  const { baseUrl } = resolved;
+
+  const detailParams = new URLSearchParams({
     proc: 'usp_mobile_apvmng_request_detail',
     param1: reqId,
-    param2: empCode,
   });
 
-  const res = await fetch(`${resolved.baseUrl}/R2JsonProc.asp?${params}`, { cache: 'no-store' }).catch(() => null);
+  const res = await fetch(`${baseUrl}/R2JsonProc.asp?${detailParams}`, { cache: 'no-store' }).catch(() => null);
   if (!res?.ok) return NextResponse.json({ error: '조회 실패' }, { status: 502 });
 
   const data = await res.json().catch(() => null);
@@ -35,20 +36,36 @@ export async function GET(request: NextRequest) {
   const row = data.items?.[0];
   if (!row) return NextResponse.json({ error: '데이터 없음' }, { status: 404 });
 
+  const currentStep: number = Number(row.CURRENT_STEP ?? 1);
+
+  // 현재 단계 승인자 목록 조회 (canAct 판별용)
+  const apvParams = new URLSearchParams({
+    proc: 'usp_mobile_apvmng_step_approvers',
+    param1: reqId,
+    param2: String(currentStep),
+  });
+  const apvRes = await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
+  const apvData = await apvRes?.json().catch(() => null);
+  const stepApprovers: { EMP_CODE: string }[] = apvData?.items ?? [];
+
   return NextResponse.json({
     reqId:       row.REQ_ID,
     menuId:      row.MENU_ID,
-    menuName:    row.MENU_NAME,
+    menuName:    row.MENU_NAME ?? row.MENU_ID ?? '',
     reqEmpCode:  row.REQ_EMP_CODE,
     reqEmpName:  row.REQ_EMP_NAME,
     status:      row.STATUS,
-    currentStep: row.CURRENT_STEP,
-    totalSteps:  row.TOTAL_STEPS,
-    createdAt:   row.CREATED_AT,
-    updatedAt:   row.UPDATED_AT,
+    currentStep,
+    totalSteps:  Number(row.TOTAL_STEPS ?? 1),
+    createdAt:   row.REG_DT ?? '',
     payload:     (() => { try { return JSON.parse(row.PAYLOAD_JSON); } catch { return {}; } })(),
-    procSnapshot: (() => { try { return JSON.parse(row.PROC_SNAPSHOT); } catch { return {}; } })(),
-    steps:       data.items2 ?? [],   // 단계별 승인자 목록 (SP가 두 번째 결과셋 반환)
-    actions:     data.items3 ?? [],   // 처리 이력
+    steps:       stepApprovers.map((r) => ({
+      STEP_NO:   currentStep,
+      APV_TYPE:  '',
+      EMP_CODE:  r.EMP_CODE,
+      EMP_NAME:  '',
+      THRESHOLD: 1,
+    })),
+    actions:     [],
   });
 }

@@ -41,6 +41,15 @@
 | `/api/leave/company-holidays` | GET | — | 회사 공휴일 목록 |
 | `/api/leave/company-holidays-by-corp` | GET | — | 법인별 공휴일 |
 
+## 휴가 신청 시 승인 절차 연동
+
+`/api/leave/request`는 ERP에 연차를 저장한 뒤 APVMNG 승인 절차 설정을 확인합니다.
+
+- **절차 설정 있음 (`LEAVE_01`)**: `/api/approval/request`를 호출해 승인 요청을 생성하고 1단계 승인자에게 푸시 알림을 보냅니다.
+- **절차 설정 없음**: 기존 방식대로 부서장(`manage_dpt_codes` 기준)에게 직접 푸시 알림을 보냅니다.
+
+승인 절차는 APVMNG_02에서 설정합니다. 자세한 내용은 [승인 관리 모듈](./approval.md)을 참고하세요.
+
 ## 캘린더 (`/calendar`)
 
 `src/app/(main)/calendar/page.tsx`

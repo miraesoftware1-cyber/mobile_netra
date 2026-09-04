@@ -27,8 +27,8 @@
 
 ## API 라우트
 
-| 경로 | 메서드 | 설명 |
-|------|--------|------| It's
+| 경로 | 메서드 | 설명 |    
+|------|--------|------| It's okay
 | `/api/expense/expense-list` | GET | 지출결의 목록 조회 |
 | `/api/expense/resolution-items` | GET | 결의 항목 조회 |
 | `/api/expense/insert-resolution` | POST | 지출결의 등록 |
@@ -41,3 +41,4 @@
 
 `react-zoom-pan-pinch` 라이브러리로 핀치 줌 미리보기를 구현합니다.  
 이미지 업로드는 `/api/expense/upload-receipts`를 통해 처리됩니다.
+4679

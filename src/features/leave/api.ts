@@ -194,6 +194,7 @@ export interface LeaveRequestPayload {
   dpt_code?: string;
   year: string;
   leaveTypeCode: string;
+  leaveTypeName?: string;
   appliedDate: string;
   startDate: string;
   endDate: string;

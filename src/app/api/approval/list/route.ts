@@ -29,7 +29,15 @@ export async function GET(request: NextRequest) {
 
   const data = await res.json().catch(() => null);
 
-  return NextResponse.json({
-    items: data?.items ?? [],
-  });
+  const items = (data?.items ?? []).map((row: Record<string, unknown>) => ({
+    REQ_ID:       row.REQ_ID,
+    MENU_NAME:    row.MENU_NAME ?? row.MENU_ID ?? '',
+    REQ_EMP_NAME: row.REQ_EMP_NAME ?? '',
+    CURRENT_STEP: row.CURRENT_STEP,
+    TOTAL_STEPS:  row.TOTAL_STEPS,
+    STATUS:       row.STATUS,
+    CREATED_AT:   row.CREATED_AT ?? row.REG_DT ?? '',
+  }));
+
+  return NextResponse.json({ items });
 }

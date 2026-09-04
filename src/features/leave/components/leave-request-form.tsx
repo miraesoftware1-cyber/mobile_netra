@@ -341,6 +341,7 @@ export function LeaveRequestForm() {
       dpt_code: user.dpt_code,
       year: CURRENT_YEAR,
       leaveTypeCode: data.leaveTypeCode,
+      leaveTypeName: holidayTypes.find((t) => t.holi_type_code === data.leaveTypeCode)?.holi_type_name ?? '',
       appliedDate: toDateParam(TODAY),
       startDate: toDateParam(data.startDate),
       endDate: toDateParam(data.endDate),
