@@ -1,7 +1,7 @@
 {
-  "name": "연차신청",
-  "short_name": "연차신청",
-  "description": "연차신청 모바일 웹 서비스",
+  "name": "Netra",
+  "short_name": "Netra",
+  "description": "Netra 모바일 웹 서비스",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f9fafb",

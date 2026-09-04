@@ -81,6 +81,25 @@ export async function GET(request: NextRequest) {
     const nameMap = new Map<string, string>(
       stepApprovers.filter(s => s.EMP_CODE && s.EMP_NAME).map(s => [s.EMP_CODE, s.EMP_NAME!]),
     );
+
+    // 현재 단계 외 과거 단계 승인자도 nameMap에 추가 (예: 1단계에서 처리한 kms)
+    const otherStepNos = [...new Set(rows.map(r => r.step_no))].filter(sn => sn !== currentStep);
+    if (otherStepNos.length > 0) {
+      const extraBatches = await Promise.all(
+        otherStepNos.map(async (sn) => {
+          const p = new URLSearchParams({ proc: 'usp_mobile_apvmng_step_approvers', param1: reqId, param2: String(sn) });
+          const r = await fetch(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' }).catch(() => null);
+          const d = await r?.json().catch(() => null);
+          return (d?.items ?? []) as { EMP_CODE: string; EMP_NAME?: string }[];
+        }),
+      );
+      for (const batch of extraBatches) {
+        for (const s of batch) {
+          if (s.EMP_CODE && s.EMP_NAME && !nameMap.has(s.EMP_CODE)) nameMap.set(s.EMP_CODE, s.EMP_NAME);
+        }
+      }
+    }
+
     actions = rows.map((r) => ({
       STEP_NO:    r.step_no,
       EMP_CODE:   r.user_id,

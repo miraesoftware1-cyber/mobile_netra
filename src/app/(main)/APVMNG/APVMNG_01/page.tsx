@@ -310,7 +310,7 @@ function ApprovalInboxContent() {
       {/* Detail Modal */}
       {(detailLoading || detail) && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4"
+          className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center px-4"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           onClick={() => { if (!actionLoading) setDetail(null); }}
         >

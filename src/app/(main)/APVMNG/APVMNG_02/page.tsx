@@ -27,6 +27,7 @@ interface Step {
   threshold: number;
   messageTitle: string;
   messageBody: string;
+  messageButtons: StepButton[];
 }
 
 interface ProcessConfig {
@@ -37,6 +38,7 @@ interface ProcessConfig {
     threshold: number;
     messageTitle: string;
     messageBody: string;
+    messageButtons?: StepButton[];
   }[];
   endMessage: StepMessage;
 }
@@ -47,6 +49,11 @@ const STEP_TYPE_LABELS: Record<StepType, string> = {
   dept_head: "부서장",
 };
 
+const DEFAULT_STEP_BUTTONS: StepButton[] = [
+  { id: "b1", name: "반려", action: "reject" },
+  { id: "b2", name: "승인", action: "approve" },
+];
+
 function makeDefaultStep(menuName: string, stepNo: number): Step {
   return {
     id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -55,6 +62,7 @@ function makeDefaultStep(menuName: string, stepNo: number): Step {
     threshold: 1,
     messageTitle: `${menuName} 승인 요청`,
     messageBody: `{requesterName}님의 ${menuName}을(를) 확인해 주세요.`,
+    messageButtons: [...DEFAULT_STEP_BUTTONS],
   };
   void stepNo;
 }
@@ -184,6 +192,8 @@ function EmpPicker({
 
 // ─── 메시지 설정 팝업 ────────────────────────────────────────────────────────
 
+const MAX_BUTTONS = 2;
+
 function MsgPopup({
   title: popupTitle,
   msg,
@@ -195,8 +205,11 @@ function MsgPopup({
   onClose: () => void;
   onChange: (m: StepMessage) => void;
 }) {
-  function setMsg(updater: (prev: StepMessage) => StepMessage) {
-    onChange(updater(msg));
+  const [localMsg, setLocalMsg] = useState<StepMessage>(msg);
+
+  function handleConfirm() {
+    onChange(localMsg);
+    onClose();
   }
 
   return (
@@ -215,16 +228,16 @@ function MsgPopup({
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1.5 block">제목</label>
             <input
-              value={msg.title}
-              onChange={(e) => setMsg((p) => ({ ...p, title: e.target.value }))}
+              value={localMsg.title}
+              onChange={(e) => setLocalMsg((p) => ({ ...p, title: e.target.value }))}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-primary"
             />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1.5 block">내용</label>
             <textarea
-              value={msg.body}
-              onChange={(e) => setMsg((p) => ({ ...p, body: e.target.value }))}
+              value={localMsg.body}
+              onChange={(e) => setLocalMsg((p) => ({ ...p, body: e.target.value }))}
               rows={3}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-primary resize-none"
             />
@@ -236,24 +249,25 @@ function MsgPopup({
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-gray-500">버튼 구성</label>
               <button
-                onClick={() => setMsg((p) => ({ ...p, buttons: [...p.buttons, { id: `b-${Date.now()}`, name: "버튼", action: "close" }] }))}
-                className="text-xs text-primary font-semibold"
+                onClick={() => setLocalMsg((p) => ({ ...p, buttons: [...p.buttons, { id: `b-${Date.now()}`, name: "버튼", action: "close" as ButtonAction }] }))}
+                disabled={localMsg.buttons.length >= MAX_BUTTONS}
+                className="text-xs text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 + 추가
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              {msg.buttons.map((btn) => (
+              {localMsg.buttons.map((btn) => (
                 <div key={btn.id} className="flex items-center gap-2">
                   <input
                     value={btn.name}
-                    onChange={(e) => setMsg((p) => ({ ...p, buttons: p.buttons.map((b) => b.id === btn.id ? { ...b, name: e.target.value } : b) }))}
+                    onChange={(e) => setLocalMsg((p) => ({ ...p, buttons: p.buttons.map((b) => b.id === btn.id ? { ...b, name: e.target.value } : b) }))}
                     className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"
                     placeholder="버튼 이름"
                   />
                   <select
                     value={btn.action}
-                    onChange={(e) => setMsg((p) => ({ ...p, buttons: p.buttons.map((b) => b.id === btn.id ? { ...b, action: e.target.value as ButtonAction } : b) }))}
+                    onChange={(e) => setLocalMsg((p) => ({ ...p, buttons: p.buttons.map((b) => b.id === btn.id ? { ...b, action: e.target.value as ButtonAction } : b) }))}
                     className="border border-gray-200 rounded-xl px-2.5 py-2.5 text-sm focus:outline-none focus:border-primary bg-white"
                   >
                     <option value="close">닫기</option>
@@ -261,8 +275,8 @@ function MsgPopup({
                     <option value="approve">승인</option>
                   </select>
                   <button
-                    onClick={() => setMsg((p) => ({ ...p, buttons: p.buttons.filter((b) => b.id !== btn.id) }))}
-                    disabled={msg.buttons.length === 1}
+                    onClick={() => setLocalMsg((p) => ({ ...p, buttons: p.buttons.filter((b) => b.id !== btn.id) }))}
+                    disabled={localMsg.buttons.length === 1}
                     className="w-8 h-8 flex items-center justify-center disabled:opacity-30"
                   >
                     <X className="w-4 h-4 text-gray-400" />
@@ -274,10 +288,10 @@ function MsgPopup({
           <div>
             <p className="text-xs font-medium text-gray-500 mb-2">미리보기</p>
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <p className="font-bold text-gray-900 text-sm mb-1">{msg.title || "제목"}</p>
-              <p className="text-xs text-gray-600 mb-3">{msg.body || "내용"}</p>
+              <p className="font-bold text-gray-900 text-sm mb-1">{localMsg.title || "제목"}</p>
+              <p className="text-xs text-gray-600 mb-3">{localMsg.body || "내용"}</p>
               <div className="flex gap-2">
-                {msg.buttons.map((btn) => (
+                {localMsg.buttons.map((btn) => (
                   <div key={btn.id} className={`flex-1 py-2 rounded-lg text-xs font-semibold text-center ${btn.action === "approve" ? "bg-primary text-white" : btn.action === "reject" ? "bg-red-500 text-white" : "bg-gray-200 text-gray-700"}`}>
                     {btn.name}
                   </div>
@@ -287,7 +301,7 @@ function MsgPopup({
           </div>
         </div>
         <div className="px-4 pb-6 pt-3 border-t border-gray-100 flex-shrink-0">
-          <button onClick={onClose} className="w-full bg-primary text-white py-3.5 rounded-xl text-sm font-bold active:opacity-90">
+          <button onClick={handleConfirm} className="w-full bg-primary text-white py-3.5 rounded-xl text-sm font-bold active:opacity-90">
             확인
           </button>
         </div>
@@ -338,6 +352,7 @@ export default function ApprovalProcessPage() {
           threshold: s.threshold,
           messageTitle: s.messageTitle ?? makeDefaultStep(menu.name, s.stepNo).messageTitle,
           messageBody: s.messageBody ?? makeDefaultStep(menu.name, s.stepNo).messageBody,
+          messageButtons: s.messageButtons ?? [...DEFAULT_STEP_BUTTONS],
         }))
       );
       if (cfg.endMessage) setEndMessage(cfg.endMessage);
@@ -370,6 +385,7 @@ export default function ApprovalProcessPage() {
           threshold: s.threshold,
           messageTitle: s.messageTitle,
           messageBody: s.messageBody,
+          messageButtons: s.messageButtons ?? [...DEFAULT_STEP_BUTTONS],
         })),
         endMessage,
       };
@@ -429,7 +445,7 @@ export default function ApprovalProcessPage() {
     ? msgPopup.stepId === 'end'
       ? endMessage
       : editingStepForMsg
-        ? { title: editingStepForMsg.messageTitle, body: editingStepForMsg.messageBody, buttons: [{ id: "b1", name: "닫기", action: "close" }, { id: "b2", name: "반려", action: "reject" }, { id: "b3", name: "승인", action: "approve" }] }
+        ? { title: editingStepForMsg.messageTitle, body: editingStepForMsg.messageBody, buttons: editingStepForMsg.messageButtons ?? [...DEFAULT_STEP_BUTTONS] }
         : null
     : null;
 
@@ -640,7 +656,7 @@ export default function ApprovalProcessPage() {
             if (msgPopup.stepId === 'end') {
               setEndMessage(m);
             } else {
-              updateStep(msgPopup.stepId, { messageTitle: m.title, messageBody: m.body });
+              updateStep(msgPopup.stepId, { messageTitle: m.title, messageBody: m.body, messageButtons: m.buttons });
             }
           }}
         />

@@ -1,6 +1,6 @@
 import { query } from "@/lib/db/postgres";
 
-const TTL_MS = 60 * 1000; // 1분
+const TTL_MS = 3 * 60 * 1000; // 3분
 const RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000; // 2시간
 const RATE_LIMIT_MAX = 3;
 
