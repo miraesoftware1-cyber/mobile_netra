@@ -311,6 +311,7 @@ function ApprovalInboxContent() {
       {(detailLoading || detail) && (
         <div
           className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           onClick={() => { if (!actionLoading) setDetail(null); }}
         >
           <div
@@ -442,7 +443,7 @@ function ApprovalInboxContent() {
                 </div>
 
                 {/* 버튼 */}
-                <div className="px-5 pb-5 pt-3 border-t border-gray-100 flex gap-2">
+                <div className="px-5 pt-3 border-t border-gray-100 flex gap-2" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
                   {canAct ? (
                     <>
                       <button
