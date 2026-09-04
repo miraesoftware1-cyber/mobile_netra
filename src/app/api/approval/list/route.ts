@@ -89,13 +89,15 @@ export async function GET(request: NextRequest) {
   }
 
   // status === 'APPROVED': 처리완료 탭 (APPROVED + REJECTED + 내가 처리한 진행중)
-  const [approvedItems, rejectedItems] = await Promise.all([
+  const [approvedItems, rejectedItems, cancelledItems] = await Promise.all([
     fetchErpList(baseUrl, erpId, 'APPROVED'),
     fetchErpList(baseUrl, erpId, 'REJECTED'),
+    fetchErpList(baseUrl, erpId, 'CANCELLED'),
   ]);
   // 내가 실제로 처리한 건만 표시 (등록만 된 건 제외)
   const erpItems = [...approvedItems, ...rejectedItems].filter((i) => actedReqIds.has(i.REQ_ID));
-  const erpReqIds = new Set(erpItems.map((i) => i.REQ_ID));
+  // CANCELLED 포함해서 pgOnlyItems 필터에서 제외할 전체 req_id
+  const erpReqIds = new Set([...erpItems, ...cancelledItems].map((i) => i.REQ_ID));
 
   // PG에서 처리했으나 아직 ERP에서 PENDING인 항목 추가
   try {
