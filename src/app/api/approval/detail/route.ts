@@ -58,11 +58,11 @@ export async function GET(request: NextRequest) {
   ]);
   const apvData   = await apvRes?.json().catch(() => null);
   const stateData = await stateRes?.json().catch(() => null);
-  const stepApprovers: { EMP_CODE: string }[] = apvData?.items ?? [];
+  const stepApprovers: { EMP_CODE: string; EMP_NAME?: string }[] = apvData?.items ?? [];
   const threshold: number = Number(stateData?.items?.[0]?.THRESHOLD ?? 1);
 
   // PG에서 실제 승인/반려 이력 조회 + 현재 단계 처리 여부 확인
-  let actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
+  let actions: { STEP_NO: number; EMP_CODE: string; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
   let userAlreadyActed = false;
   try {
     const { rows } = await query<{ step_no: number; apv_name: string; apv_code: string; action: string; comment: string; created_at: string }>(
@@ -72,12 +72,12 @@ export async function GET(request: NextRequest) {
     );
     actions = rows.map((r) => ({
       STEP_NO:    r.step_no,
+      EMP_CODE:   r.apv_code,
       EMP_NAME:   r.apv_name,
       ACTION:     r.action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
       COMMENT:    r.comment,
       CREATED_AT: r.created_at,
     }));
-    // 현재 단계를 이미 처리했으면 버튼 숨김
     userAlreadyActed = rows.some((r) => r.step_no === currentStep && (r.apv_code === empCode || r.apv_code === userId));
   } catch { /* 무시 */ }
 
@@ -95,11 +95,11 @@ export async function GET(request: NextRequest) {
     procSnapshot: {},
     userAlreadyActed,
     threshold,
-    steps:       stepApprovers.map((r) => ({
+    steps: stepApprovers.map((r) => ({
       STEP_NO:   currentStep,
       APV_TYPE:  '',
       EMP_CODE:  r.EMP_CODE,
-      EMP_NAME:  '',
+      EMP_NAME:  r.EMP_NAME ?? '',
       THRESHOLD: threshold,
     })),
     actions,

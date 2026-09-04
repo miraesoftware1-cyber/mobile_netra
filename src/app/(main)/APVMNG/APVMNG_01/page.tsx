@@ -37,7 +37,7 @@ type DetailData = {
   };
   threshold: number;
   steps: { STEP_NO: number; APV_TYPE: string; EMP_CODE: string; EMP_NAME: string; THRESHOLD: number }[];
-  actions: { STEP_NO: number; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[];
+  actions: { STEP_NO: number; EMP_CODE: string; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[];
   userAlreadyActed: boolean;
 };
 
@@ -361,45 +361,61 @@ function ApprovalInboxContent() {
                     <div className="flex flex-col gap-2">
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">승인 현황</p>
                       {(() => {
-                        const stepsMap = new Map<number, typeof detail.actions>();
+                        // 과거 단계별 actions 그룹핑
+                        const actMap = new Map<number, typeof detail.actions>();
                         for (const a of detail.actions) {
-                          if (!stepsMap.has(a.STEP_NO)) stepsMap.set(a.STEP_NO, []);
-                          stepsMap.get(a.STEP_NO)!.push(a);
+                          if (!actMap.has(a.STEP_NO)) actMap.set(a.STEP_NO, []);
+                          actMap.get(a.STEP_NO)!.push(a);
                         }
-                        if (!stepsMap.has(detail.currentStep) && detail.status === 'PENDING') {
-                          stepsMap.set(detail.currentStep, []);
-                        }
-                        return Array.from(stepsMap.entries()).sort(([a], [b]) => a - b).map(([stepNo, acts]) => {
-                          const isCurrentStep = stepNo === detail.currentStep;
-                          const threshold = isCurrentStep ? (detail.threshold || 1) : null;
+                        // 렌더할 단계 목록: 과거 단계 + 현재 단계
+                        const stepNos = Array.from(new Set([
+                          ...Array.from(actMap.keys()),
+                          detail.currentStep,
+                        ])).sort((a, b) => a - b);
+
+                        return stepNos.map((stepNo) => {
+                          const acts = actMap.get(stepNo) ?? [];
+                          const isCurrentStep = stepNo === detail.currentStep && detail.status === 'PENDING';
                           const approvedCnt = acts.filter(a => a.ACTION === 'APPROVED').length;
-                          const pendingCnt = threshold != null ? Math.max(0, threshold - approvedCnt) : 0;
                           const comments = acts.filter(a => a.COMMENT);
+
+                          // 현재 PENDING 단계: steps 배열(ERP 승인자 목록) 기준으로 이름+색상 표시
+                          const badges = isCurrentStep && detail.steps.length > 0
+                            ? detail.steps.map((s) => {
+                                const act = acts.find(a => a.EMP_CODE === s.EMP_CODE || a.EMP_CODE === s.EMP_CODE);
+                                const name = s.EMP_NAME || s.EMP_CODE;
+                                if (act?.ACTION === 'APPROVED') return { name, color: 'green' as const, icon: 'check' as const };
+                                if (act?.ACTION === 'REJECTED') return { name, color: 'red' as const, icon: 'x' as const };
+                                return { name, color: 'gray' as const, icon: 'clock' as const };
+                              })
+                            : acts.map((a) => ({
+                                name: a.EMP_NAME,
+                                color: a.ACTION === 'APPROVED' ? 'green' as const : 'red' as const,
+                                icon: a.ACTION === 'APPROVED' ? 'check' as const : 'x' as const,
+                              }));
+
+                          if (badges.length === 0) return null;
+
                           return (
                             <div key={stepNo} className="flex flex-col gap-1.5">
                               {detail.totalSteps > 1 && (
                                 <span className="text-xs text-gray-400">
-                                  {stepNo}단계{threshold != null && threshold > 1 ? ` · ${approvedCnt}/${threshold}명` : ''}
+                                  {stepNo}단계{isCurrentStep && detail.threshold > 1 ? ` · ${approvedCnt}/${detail.threshold}명` : ''}
                                 </span>
                               )}
                               <div className="flex flex-wrap gap-1.5">
-                                {acts.map((a, i) => (
+                                {badges.map((b, i) => (
                                   <span key={i} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold ${
-                                    a.ACTION === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                                    b.color === 'green' ? 'bg-green-100 text-green-700'
+                                    : b.color === 'red' ? 'bg-red-100 text-red-600'
+                                    : 'bg-gray-100 text-gray-400'
                                   }`}>
-                                    {a.ACTION === 'APPROVED'
-                                      ? <Check className="w-3 h-3" />
-                                      : <XCircle className="w-3 h-3" />
-                                    }
-                                    {a.EMP_NAME}
+                                    {b.icon === 'check' ? <Check className="w-3 h-3" />
+                                      : b.icon === 'x' ? <XCircle className="w-3 h-3" />
+                                      : <Clock className="w-3 h-3" />}
+                                    {b.name}
                                   </span>
                                 ))}
-                                {pendingCnt > 0 && (
-                                  <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400">
-                                    <Clock className="w-3 h-3" />
-                                    {pendingCnt}명 대기중
-                                  </span>
-                                )}
                               </div>
                               {comments.map((a, i) => (
                                 <p key={i} className="text-xs text-gray-500 pl-1">"{a.COMMENT}"</p>
