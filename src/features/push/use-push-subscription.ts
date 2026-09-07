@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+const SESSION_KEY = "netra-push-registered";
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -16,11 +17,14 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 
 export function usePushSubscription() {
   const user = useAuthStore((s) => s.user);
-  // 승인 권한 여부 무관하게 구독 — 그룹 멤버·신청자 모두 알림 수신 필요
 
   useEffect(() => {
     if (!user) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+    // 세션당 한 번만 실행 (페이지 이동마다 재구독 방지)
+    const flagKey = `${SESSION_KEY}-${user.emp_code}`;
+    if (sessionStorage.getItem(flagKey)) return;
 
     (async () => {
       try {
@@ -30,9 +34,10 @@ export function usePushSubscription() {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") return;
 
-        // 기존 구독 재사용 (매 이동마다 새 엔드포인트 생성 방지)
+        // 기존 구독 해제 후 재구독 — VAPID 키 불일치 방지
         const existing = await reg.pushManager.getSubscription();
-        const sub = existing ?? await reg.pushManager.subscribe({
+        if (existing) await existing.unsubscribe();
+        const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         });
@@ -48,6 +53,8 @@ export function usePushSubscription() {
             manage_dpt_codes: user.manage_dpt_codes,
           }),
         });
+
+        sessionStorage.setItem(flagKey, "1");
       } catch (err) {
         console.error("[push] 구독 등록 실패:", err);
       }
