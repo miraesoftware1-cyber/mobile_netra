@@ -267,6 +267,8 @@ async function sendNotifications(setup: ApprovalSetup) {
   const groupIds    = step1Approvers.filter((a) => a.userId).map((a) => a.userId as string);
   const deptCodes   = step1Approvers.filter((a) => !a.userId).map((a) => a.empCode);
 
+  console.log('[push] corp_code:', corp_code, 'groupIds:', groupIds, 'deptCodes:', deptCodes);
+
   let subs: { subscription: webpush.PushSubscription; emp_code: string }[] = [];
   if (groupIds.length > 0) {
     const ph = groupIds.map((_, i) => `$${i+2}`).join(',');
@@ -274,6 +276,7 @@ async function sendNotifications(setup: ApprovalSetup) {
       `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code=$1 AND user_id IN (${ph})`,
       [corp_code, ...groupIds],
     );
+    console.log('[push] user_id 조회 결과:', rows.length, '건, emp_codes:', rows.map(r=>r.emp_code));
     subs = [...subs, ...rows];
   }
   if (deptCodes.length > 0) {
@@ -282,10 +285,27 @@ async function sendNotifications(setup: ApprovalSetup) {
       `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code=$1 AND emp_code IN (${ph})`,
       [corp_code, ...deptCodes],
     );
+    console.log('[push] emp_code 조회 결과:', rows.length, '건');
     subs = [...subs, ...rows];
   }
 
-  if (subs.length === 0) return;
+  // 구독자 없으면 corp_code 무시하고 user_id만으로 재시도
+  if (subs.length === 0 && groupIds.length > 0) {
+    const ph = groupIds.map((_, i) => `$${i+1}`).join(',');
+    const { rows: allRows } = await query<{ subscription: webpush.PushSubscription; emp_code: string; corp_code: string; user_id: string }>(
+      `SELECT subscription, emp_code, corp_code, user_id FROM netra_push_subscriptions WHERE user_id IN (${ph})`,
+      groupIds,
+    );
+    console.log('[push] corp_code 없이 user_id 조회:', allRows.map(r=>({ emp_code: r.emp_code, corp_code: r.corp_code, user_id: r.user_id })));
+    subs = [...subs, ...allRows];
+  }
+
+  if (subs.length === 0) {
+    console.log('[push] 구독자 없음 - 푸시 미발송');
+    return;
+  }
+
+  console.log('[push] 푸시 발송:', subs.length, '명');
 
   const msgTitle = replaceVars(step1Config?.messageTitle ?? '연차 신청 알림', varArgs);
   const msgBody  = replaceVars(step1Config?.messageBody  ?? '{신청자}님이 연차를 신청했습니다.', varArgs);
