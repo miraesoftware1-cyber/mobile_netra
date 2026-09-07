@@ -503,7 +503,8 @@ function StepDetailPanel({
   const [absenceOpen, setAbsenceOpen] = useState(false);
   const [threshOpen, setThreshOpen]   = useState(false);
 
-  const thresholdOptions = Array.from({ length: Math.max(step.members.length, 1) }, (_, i) => ({
+  const thresholdMax = step.type === "group" ? 10 : Math.max(step.members.length, 1);
+  const thresholdOptions = Array.from({ length: thresholdMax }, (_, i) => ({
     value: String(i + 1),
     label: i + 1 === 1 ? "1명만 승인" : `${i + 1}명 이상 승인`,
   }));
@@ -543,7 +544,7 @@ function StepDetailPanel({
 
   const approverValue = stepDisplayName(step) || "선택";
   const typeValue     = STEP_TYPE_LABELS[step.type];
-  const threshValue   = step.type === "group" && step.members.length > 1
+  const threshValue   = step.type === "group" && step.members.length >= 1
     ? (step.threshold === 1 ? "1명만 승인" : `${step.threshold}명 이상 승인`)
     : null;
   const absenceValue  = ABSENCE_LABELS[step.absenceHandling];
