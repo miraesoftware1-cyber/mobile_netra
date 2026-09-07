@@ -59,7 +59,7 @@ export function LoginForm() {
 
   const startCountdown = () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setSecondsLeft(60);
+    setSecondsLeft(180);
     timerRef.current = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
