@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
 import webpush from 'web-push';
@@ -120,11 +120,13 @@ export async function POST(request: NextRequest) {
 
   const yearSeq: number = Number((insertData.items as Array<Record<string, unknown>>)?.[0]?.YEAR_SEQ ?? 0);
 
-  // 승인 절차 및 푸시 — 백그라운드 실행 (사용자 응답 지연 방지)
-  runApprovalFlow({
-    baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
-    leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
-  }).catch((err) => console.error('[leave/request] approval flow 실패:', err));
+  // 응답 먼저 보내고, 승인 절차·푸시는 after()로 보장 실행
+  after(() =>
+    runApprovalFlow({
+      baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
+      leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
+    }).catch((err) => console.error('[leave/request] approval flow 실패:', err)),
+  );
 
   return NextResponse.json({ success: true, message: insertData.MSG });
 }
