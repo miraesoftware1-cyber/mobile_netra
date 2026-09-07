@@ -214,7 +214,8 @@ async function runApprovalFlow({
       }
     } else {
       for (const m of step.members ?? []) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType: 'INDIVIDUAL', empCode: m.empCode, threshold: step.threshold });
+        // m.empCode는 ERP user_id (예: 'pmk') — user_id 컬럼으로 구독 조회해야 함
+        stepApprovers.push({ stepNo: step.stepNo, apvType: 'INDIVIDUAL', empCode: m.empCode, userId: m.empCode, threshold: step.threshold });
       }
     }
   }
