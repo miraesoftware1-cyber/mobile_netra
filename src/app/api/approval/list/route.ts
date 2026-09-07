@@ -65,8 +65,9 @@ export async function GET(request: NextRequest) {
         `SELECT req_id FROM netra_cancelled_reqs`,
       );
       cancelledReqIds = new Set(cRows.map((r) => Number(r.req_id)));
-      if (cancelledReqIds.size > 0) console.log('[approval/list] 취소된 req_ids:', [...cancelledReqIds]);
+        if (cancelledReqIds.size > 0) console.log('[approval/list] 취소된 req_ids:', [...cancelledReqIds]);
     } catch { /* 테이블 없으면 무시 */ }
+    console.log('[approval/list] ERP PENDING 목록:', items.map(i => ({ REQ_ID: i.REQ_ID, STATUS: i.STATUS, CURRENT_STEP: i.CURRENT_STEP })));
     const filtered = items.filter((item) =>
       !actedKeys.has(`${item.REQ_ID}:${item.CURRENT_STEP}`) && !cancelledReqIds.has(item.REQ_ID)
     );

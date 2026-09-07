@@ -70,10 +70,24 @@ export async function POST(request: NextRequest) {
       console.log('[cancel] year_seq 조회 실패, startDate로 재시도:', startDate);
       const byDate = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
         `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
-         FROM netra_apvmng_requests WHERE emp_code=$1 AND start_date=$2 LIMIT 1`,
+         FROM netra_apvmng_requests WHERE emp_code=$1 AND start_date=$2
+         ORDER BY req_id DESC LIMIT 1`,
         [emp_code, startDate],
       );
       rows = byDate.rows;
+    }
+    // year_seq 조회 성공해도 더 최신 req_id가 있으면 그걸 사용 (startDate 기준 최신)
+    if (rows.length > 0 && startDate) {
+      const byDateLatest = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
+        `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
+         FROM netra_apvmng_requests WHERE emp_code=$1 AND start_date=$2
+         ORDER BY req_id DESC LIMIT 1`,
+        [emp_code, startDate],
+      );
+      if (byDateLatest.rows.length > 0 && byDateLatest.rows[0].req_id > rows[0].req_id) {
+        console.log('[cancel] 더 최신 req_id 발견:', byDateLatest.rows[0].req_id, '(기존:', rows[0].req_id, ')');
+        rows = byDateLatest.rows;
+      }
     }
     console.log('[cancel] PG 조회 결과:', rows.length, '건', rows[0] ?? '없음');
 
