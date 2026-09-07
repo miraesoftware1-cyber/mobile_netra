@@ -10,6 +10,7 @@ const schema = z.object({
   emp_code:    z.string().min(1),
   year:        z.string().regex(/^\d{4}$/),
   year_seq:    z.number().int(),
+  startDate:   z.string().regex(/^\d{8}$/).optional(),
 });
 
 async function ensureCancelledTable() {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
   }
 
-  const { companyCode, emp_code, year, year_seq } = parsed.data;
+  const { companyCode, emp_code, year, year_seq, startDate } = parsed.data;
 
   const resolved = await resolveCompanyErpBaseUrl(companyCode);
   if (resolved.status === 'missing_gateway_env') return NextResponse.json({ error: '서버 설정 오류입니다.' }, { status: 500 });
@@ -56,11 +57,25 @@ export async function POST(request: NextRequest) {
 
   // 2. 연동된 승인 요청 취소
   try {
-    const { rows } = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
+    console.log('[cancel] PG 조회 시도:', { emp_code, year, year_seq, startDate });
+    // year_seq 조회 먼저, 실패 시 startDate로 대체 조회
+    let rows: { req_id: number; corp_code: string; req_emp_name: string }[] = [];
+    const bySeq = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
       `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
        FROM netra_apvmng_requests WHERE emp_code=$1 AND year=$2 AND year_seq=$3 LIMIT 1`,
       [emp_code, year, year_seq],
     );
+    rows = bySeq.rows;
+    if (rows.length === 0 && startDate) {
+      console.log('[cancel] year_seq 조회 실패, startDate로 재시도:', startDate);
+      const byDate = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
+        `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
+         FROM netra_apvmng_requests WHERE emp_code=$1 AND start_date=$2 LIMIT 1`,
+        [emp_code, startDate],
+      );
+      rows = byDate.rows;
+    }
+    console.log('[cancel] PG 조회 결과:', rows.length, '건', rows[0] ?? '없음');
 
     if (rows.length > 0) {
       const { req_id: reqId, corp_code: corpCode, req_emp_name: reqEmpName } = rows[0];
@@ -72,7 +87,9 @@ export async function POST(request: NextRequest) {
         param2: 'REJECTED',
         param3: '1',
       });
-      await fetch(`${baseUrl}/R2JsonProc.asp?${setStepParams}`).catch(() => null);
+      const setStepRes = await fetch(`${baseUrl}/R2JsonProc.asp?${setStepParams}`).catch(() => null);
+      const setStepData = await setStepRes?.json().catch(() => null);
+      console.log('[cancel] set_step 결과:', setStepData?.Flag, setStepData?.MSG);
 
       // PG에 취소된 req_id 기록 (대기중 목록 필터링용)
       await ensureCancelledTable();

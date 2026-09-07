@@ -313,11 +313,12 @@ export async function cancelLeave(
   emp_code: string,
   year: string,
   year_seq: number,
+  startDate?: string,
 ): Promise<CancelLeaveResult> {
   const res = await fetch('/api/leave/cancel', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyCode, emp_code, year, year_seq }),
+    body: JSON.stringify({ companyCode, emp_code, year, year_seq, startDate }),
   });
 
   if (!res.ok) {

@@ -118,6 +118,7 @@ export function LeaveInquiryView() {
         user!.emp_code,
         row.year_bdate?.slice(0, 4) ?? String(baseYear),
         row.year_seq!,
+        row.year_bdate?.replace(/-/g, '').slice(0, 8),
       ),
     onSuccess: (result) => {
       if (!result.success) {
