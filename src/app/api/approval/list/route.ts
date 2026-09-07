@@ -44,6 +44,18 @@ export async function GET(request: NextRequest) {
   }
   const { baseUrl } = resolved;
 
+  // userId(그룹 등록 시)와 empCode(개인 등록 시) 둘 다 조회 후 합산 (중복 제거)
+  async function fetchMerged(status: string) {
+    const byUserId  = erpId !== empCode ? await fetchErpList(baseUrl, erpId, status)  : [];
+    const byEmpCode = await fetchErpList(baseUrl, empCode, status);
+    const seen = new Set<number>();
+    return [...byUserId, ...byEmpCode].filter((r) => {
+      if (seen.has(r.REQ_ID)) return false;
+      seen.add(r.REQ_ID);
+      return true;
+    });
+  }
+
   // PG에서 이미 처리한 (req_id, step_no) 쌍 조회 — 단계별로 체크해야 다단계 승인자 누락 방지
   let actedKeys: Set<string> = new Set();
   let actedReqIds: Set<number> = new Set(); // 처리완료 탭용
@@ -58,7 +70,7 @@ export async function GET(request: NextRequest) {
 
   if (status === 'PENDING') {
     // ERP PENDING 목록에서 현재 단계를 이미 처리한 항목 및 취소된 항목 제외
-    const items = await fetchErpList(baseUrl, erpId, 'PENDING');
+    const items = await fetchMerged('PENDING');
     let cancelledReqIds: Set<number> = new Set();
     try {
       const { rows: cRows } = await query<{ req_id: number }>(
@@ -102,9 +114,9 @@ export async function GET(request: NextRequest) {
 
   // status === 'APPROVED': 처리완료 탭 (APPROVED + REJECTED + 내가 처리한 진행중)
   const [approvedItems, rejectedItems, cancelledItems] = await Promise.all([
-    fetchErpList(baseUrl, erpId, 'APPROVED'),
-    fetchErpList(baseUrl, erpId, 'REJECTED'),
-    fetchErpList(baseUrl, erpId, 'CANCELLED'),
+    fetchMerged('APPROVED'),
+    fetchMerged('REJECTED'),
+    fetchMerged('CANCELLED'),
   ]);
   // 내가 실제로 처리한 건만 표시 (등록만 된 건 제외)
   const erpItems = [...approvedItems, ...rejectedItems].filter((i) => actedReqIds.has(i.REQ_ID));
