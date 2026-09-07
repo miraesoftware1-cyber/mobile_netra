@@ -65,11 +65,11 @@ export async function POST(request: NextRequest) {
     if (rows.length > 0) {
       const { req_id: reqId, corp_code: corpCode, req_emp_name: reqEmpName } = rows[0];
 
-      // ERP 승인 요청 상태를 CANCELLED로 변경 (SP가 지원하면 적용됨)
+      // ERP 승인 요청 상태를 REJECTED로 변경 (CANCELLED는 미지원)
       const setStepParams = new URLSearchParams({
         proc:   'usp_mobile_apvmng_set_step',
         param1: String(reqId),
-        param2: 'CANCELLED',
+        param2: 'REJECTED',
         param3: '1',
       });
       await fetch(`${baseUrl}/R2JsonProc.asp?${setStepParams}`).catch(() => null);
