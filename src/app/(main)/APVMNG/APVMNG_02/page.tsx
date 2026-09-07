@@ -609,6 +609,7 @@ export default function ApprovalProcessPage() {
   const [loadingConfig, setLoadingConfig]   = useState(false);
   const [saving, setSaving]                 = useState(false);
   const [saveOk, setSaveOk]                 = useState(false);
+  const [saveError, setSaveError]           = useState<string | null>(null);
 
   // Navigation
   type ViewState = "list" | "push-settings";
@@ -662,6 +663,7 @@ export default function ApprovalProcessPage() {
     if (!companyCode) return;
     setSaving(true);
     setSaveOk(false);
+    setSaveError(null);
     try {
       const config: ProcessConfig = {
         steps: steps.map((s, i) => ({
@@ -679,7 +681,17 @@ export default function ApprovalProcessPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyCode, menuId: selectedMenuId, procName: selectedMenu.name, config }),
       });
-      if (res.ok) { setSaveOk(true); setTimeout(() => setSaveOk(false), 2000); }
+      if (res.ok) {
+        setSaveOk(true);
+        setTimeout(() => setSaveOk(false), 2000);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setSaveError((errData as { error?: string }).error || '저장에 실패했습니다.');
+        setTimeout(() => setSaveError(null), 3000);
+      }
+    } catch {
+      setSaveError('네트워크 오류가 발생했습니다.');
+      setTimeout(() => setSaveError(null), 3000);
     } finally {
       setSaving(false);
     }
@@ -745,9 +757,9 @@ export default function ApprovalProcessPage() {
           <button
             onClick={handleSave}
             disabled={saving || loadingConfig}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${saveOk ? "bg-green-500 text-white" : "bg-primary text-white"}`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${saveError ? "bg-red-500 text-white" : saveOk ? "bg-green-500 text-white" : "bg-primary text-white"}`}
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveOk ? "저장됨 ✓" : "저장"}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveError ? "저장 실패" : saveOk ? "저장됨 ✓" : "저장"}
           </button>
         </div>
       </header>
