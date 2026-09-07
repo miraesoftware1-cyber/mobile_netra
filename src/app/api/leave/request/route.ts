@@ -120,15 +120,11 @@ export async function POST(request: NextRequest) {
 
   const yearSeq: number = Number((insertData.items as Array<Record<string, unknown>>)?.[0]?.YEAR_SEQ ?? 0);
 
-  // 승인 절차 및 푸시 (타임아웃 적용으로 hang 방지)
-  try {
-    await runApprovalFlow({
-      baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
-      leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
-    });
-  } catch (err) {
-    console.error('[leave/request] approval flow 실패:', err);
-  }
+  // 승인 절차 및 푸시 — 백그라운드 실행 (사용자 응답 지연 방지)
+  runApprovalFlow({
+    baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
+    leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
+  }).catch((err) => console.error('[leave/request] approval flow 실패:', err));
 
   return NextResponse.json({ success: true, message: insertData.MSG });
 }
@@ -310,8 +306,22 @@ async function runApprovalFlow({
     subs = [...subs, ...rows];
   }
   console.log('[approval-flow] push subs found:', subs.length, 'for empCodes:', step1EmpCodes);
-  const msgTitle = step1?.messageTitle ?? '연차 신청 알림';
-  const msgBody = (step1?.messageBody ?? '{requesterName}님이 연차를 신청했습니다.')
+  const msgTitle = (step1?.messageTitle ?? '연차 신청 알림')
+    .replace('{신청자}', emp_name || emp_code)
+    .replace('{문서명}', leaveTypeName || leaveTypeCode)
+    .replace('{기간}', `${startDate.slice(0,4)}.${startDate.slice(4,6)}.${startDate.slice(6,8)}~${endDate.slice(0,4)}.${endDate.slice(4,6)}.${endDate.slice(6,8)}`)
+    .replace('{일수}', `${usedDays}일`)
+    .replace('{단계}', '1단계')
+    .replace('{부서}', dpt_code)
+    .replace('{requesterName}', emp_name || emp_code)
+    .replace('{menuName}', '연차 신청');
+  const msgBody = (step1?.messageBody ?? '{신청자}님이 연차를 신청했습니다.')
+    .replace('{신청자}', emp_name || emp_code)
+    .replace('{문서명}', leaveTypeName || leaveTypeCode)
+    .replace('{기간}', `${startDate.slice(0,4)}.${startDate.slice(4,6)}.${startDate.slice(6,8)}~${endDate.slice(0,4)}.${endDate.slice(4,6)}.${endDate.slice(6,8)}`)
+    .replace('{일수}', `${usedDays}일`)
+    .replace('{단계}', '1단계')
+    .replace('{부서}', dpt_code)
     .replace('{requesterName}', emp_name || emp_code)
     .replace('{menuName}', '연차 신청');
   await Promise.allSettled(
