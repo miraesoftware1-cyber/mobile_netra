@@ -310,7 +310,7 @@ async function sendNotifications(setup: ApprovalSetup) {
   const msgTitle = replaceVars(step1Config?.messageTitle ?? '연차 신청 알림', varArgs);
   const msgBody  = replaceVars(step1Config?.messageBody  ?? '{신청자}님이 연차를 신청했습니다.', varArgs);
 
-  await Promise.allSettled(subs.map((row) =>
+  const results = await Promise.allSettled(subs.map((row) =>
     sendPushNotification(row.subscription, {
       title: msgTitle, body: msgBody,
       url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
@@ -318,4 +318,8 @@ async function sendNotifications(setup: ApprovalSetup) {
       approvalAction: { reqId, companyCode, corpCode: corp_code, empCode: row.emp_code, empName: '' },
     }),
   ));
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') console.error('[push] 발송 실패 emp_code:', subs[i].emp_code, r.reason);
+    else console.log('[push] 발송 성공 emp_code:', subs[i].emp_code);
+  });
 }
