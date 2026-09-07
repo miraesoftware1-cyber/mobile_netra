@@ -35,7 +35,7 @@ export async function sendPushNotification(
   } catch (err: unknown) {
     // 410 Gone / 404 = 구독 만료 → DB에서 자동 삭제
     const status = (err as { statusCode?: number })?.statusCode;
-    if (status === 410 || status === 404) {
+    if (status === 410 || status === 404 || status === 403) {
       await query(
         `DELETE FROM netra_push_subs WHERE endpoint = $1`,
         [subscription.endpoint],
