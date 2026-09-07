@@ -19,7 +19,7 @@ const actionSchema = z.object({
   empCode:     z.string().min(1),
   userId:      z.string().default(''),
   empName:     z.string().default(''),
-  action:      z.enum(['APPROVED', 'REJECTED']),
+  action:      z.enum(['APPROVED', 'REJECTED', 'FINAL_APPROVE']),
   comment:     z.string().default(''),
 });
 
@@ -93,7 +93,8 @@ export async function POST(request: NextRequest) {
 
   const { companyCode, corpCode, reqId, empCode, userId, empName, action, comment } = parsed.data;
   const erpId = userId || empCode; // ERP는 USER_ID로 등록, PG는 empCode 사용
-  const erpAction = action === 'APPROVED' ? 'APPROVE' : 'REJECT';
+  const isFinalApprove = action === 'FINAL_APPROVE';
+  const erpAction = (action === 'APPROVED' || isFinalApprove) ? 'APPROVE' : 'REJECT';
   console.log('[action] start reqId:', reqId, 'erpId:', erpId, 'action:', erpAction);
 
   const resolved = await resolveCompanyErpBaseUrl(companyCode);
@@ -140,7 +141,12 @@ export async function POST(request: NextRequest) {
   let nextStepNo  = 0;
   let needSetStep = false;
 
-  if (erpAction === 'REJECT') {
+  // 전결: 남은 단계 무관하게 즉시 최종 승인
+  if (isFinalApprove) {
+    newStatus   = 'APPROVED';
+    needSetStep = true;
+    console.log('[action] 전결 처리 — 즉시 최종 승인');
+  } else if (erpAction === 'REJECT') {
     // 즉시 반려가 아니라, "남은 인원이 threshold 달성 불가능"할 때만 최종 반려
     const apvListData = await erpGet(baseUrl, 'usp_mobile_apvmng_step_approvers', {
       param1: String(reqId),

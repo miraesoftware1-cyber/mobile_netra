@@ -39,6 +39,7 @@ type DetailData = {
   steps: { STEP_NO: number; APV_TYPE: string; EMP_CODE: string; EMP_NAME: string; THRESHOLD: number }[];
   actions: { STEP_NO: number; EMP_CODE: string; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[];
   userAlreadyActed: boolean;
+  allowFinalDecision: boolean;
 };
 
 const MENU_LABEL: Record<string, string> = {
@@ -139,7 +140,7 @@ function ApprovalInboxContent() {
     }
   }
 
-  async function handleAction(action: 'APPROVED' | 'REJECTED') {
+  async function handleAction(action: 'APPROVED' | 'REJECTED' | 'FINAL_APPROVE') {
     if (!detail) return;
     setActionLoading(true);
     try {
@@ -443,30 +444,41 @@ function ApprovalInboxContent() {
                 </div>
 
                 {/* 버튼 */}
-                <div className="px-5 pt-3 border-t border-gray-100 flex gap-2" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+                <div className="px-5 pt-3 border-t border-gray-100 flex flex-col gap-2" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
                   {canAct ? (
                     <>
-                      <button
-                        onClick={() => setDetail(null)}
-                        disabled={actionLoading}
-                        className="flex-1 py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-600 active:bg-gray-200"
-                      >
-                        닫기
-                      </button>
-                      <button
-                        onClick={() => handleAction('REJECTED')}
-                        disabled={actionLoading}
-                        className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500 text-white active:opacity-90 disabled:opacity-50"
-                      >
-                        {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '반려'}
-                      </button>
-                      <button
-                        onClick={() => handleAction('APPROVED')}
-                        disabled={actionLoading}
-                        className="flex-1 py-3 rounded-xl text-sm font-semibold bg-primary text-white active:opacity-90 disabled:opacity-50"
-                      >
-                        {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '승인'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setDetail(null)}
+                          disabled={actionLoading}
+                          className="flex-1 py-3 rounded-xl text-sm font-semibold bg-gray-100 text-gray-600 active:bg-gray-200"
+                        >
+                          닫기
+                        </button>
+                        <button
+                          onClick={() => handleAction('REJECTED')}
+                          disabled={actionLoading}
+                          className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500 text-white active:opacity-90 disabled:opacity-50"
+                        >
+                          {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '반려'}
+                        </button>
+                        <button
+                          onClick={() => handleAction('APPROVED')}
+                          disabled={actionLoading}
+                          className="flex-1 py-3 rounded-xl text-sm font-semibold bg-primary text-white active:opacity-90 disabled:opacity-50"
+                        >
+                          {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '승인'}
+                        </button>
+                      </div>
+                      {detail.allowFinalDecision && detail.currentStep < detail.totalSteps && (
+                        <button
+                          onClick={() => handleAction('FINAL_APPROVE')}
+                          disabled={actionLoading}
+                          className="w-full py-2.5 rounded-xl text-sm font-semibold border-2 border-amber-400 text-amber-600 bg-amber-50 active:bg-amber-100 disabled:opacity-50"
+                        >
+                          {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '전결 (남은 단계 생략하고 최종 승인)'}
+                        </button>
+                      )}
                     </>
                   ) : (
                     <button

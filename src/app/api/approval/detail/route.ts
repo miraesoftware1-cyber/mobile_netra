@@ -52,14 +52,31 @@ export async function GET(request: NextRequest) {
     param1: reqId,
     param2: userId || empCode,
   });
-  const [apvRes, stateRes] = await Promise.all([
+  const menuId = String(row.MENU_ID ?? '');
+  const procParams = new URLSearchParams({
+    proc: 'usp_mobile_apvmng_process_get',
+    param1: menuId,
+  });
+  const [apvRes, stateRes, procRes] = await Promise.all([
     fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null),
     fetch(`${baseUrl}/R2JsonProc.asp?${stateParams}`, { cache: 'no-store' }).catch(() => null),
+    fetch(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' }).catch(() => null),
   ]);
   const apvData   = await apvRes?.json().catch(() => null);
   const stateData = await stateRes?.json().catch(() => null);
+  const procData  = await procRes?.json().catch(() => null);
   const stepApprovers: { EMP_CODE: string; EMP_NAME?: string }[] = apvData?.items ?? [];
   const threshold: number = Number(stateData?.items?.[0]?.THRESHOLD ?? 1);
+
+  // process config에서 현재 단계 전결 허용 여부 확인
+  let allowFinalDecision = false;
+  try {
+    if (String(procData?.Flag) === '0' && procData?.items?.[0]?.CONFIG_JSON) {
+      const cfg = JSON.parse(procData.items[0].CONFIG_JSON);
+      const stepCfg = (cfg?.steps ?? []).find((s: { stepNo?: number }) => s.stepNo === currentStep);
+      allowFinalDecision = stepCfg?.allowFinalDecision === true;
+    }
+  } catch { /* 무시 */ }
 
   // PG에서 실제 승인/반려 이력 조회 + 현재 단계 처리 여부 확인
   let actions: { STEP_NO: number; EMP_CODE: string; EMP_NAME: string; ACTION: string; COMMENT: string; CREATED_AT: string }[] = [];
@@ -125,6 +142,7 @@ export async function GET(request: NextRequest) {
     procSnapshot: {},
     userAlreadyActed,
     threshold,
+    allowFinalDecision,
     steps: stepApprovers.map((r) => ({
       STEP_NO:   currentStep,
       APV_TYPE:  '',
