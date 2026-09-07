@@ -499,9 +499,8 @@ function StepDetailPanel({
   onPushSettings: () => void;
   onEmpPicker: () => void;
 }) {
-  const [typeOpen, setTypeOpen]       = useState(false);
-  const [absenceOpen, setAbsenceOpen] = useState(false);
-  const [threshOpen, setThreshOpen]   = useState(false);
+  const [typeOpen, setTypeOpen]   = useState(false);
+  const [threshOpen, setThreshOpen] = useState(false);
 
   const thresholdMax = step.type === "group" ? 10 : Math.max(step.members.length, 1);
   const thresholdOptions = Array.from({ length: thresholdMax }, (_, i) => ({
@@ -510,9 +509,6 @@ function StepDetailPanel({
   }));
   const typeOptions = (["individual", "group", "dept_head"] as StepType[]).map((t) => ({
     value: t, label: STEP_TYPE_LABELS[t],
-  }));
-  const absenceOptions = (["none", "superior", "proxy"] as AbsenceHandling[]).map((a) => ({
-    value: a, label: ABSENCE_LABELS[a],
   }));
 
   function Row({ label, value, onTap }: { label: string; value: string; onTap?: () => void }) {
@@ -547,8 +543,6 @@ function StepDetailPanel({
   const threshValue   = step.type === "group" && step.members.length >= 1
     ? (step.threshold === 1 ? "1명만 승인" : `${step.threshold}명 이상 승인`)
     : null;
-  const absenceValue  = ABSENCE_LABELS[step.absenceHandling];
-
   return (
     <>
       <div className="bg-white rounded-2xl border border-primary/20 shadow-sm overflow-hidden">
@@ -563,7 +557,6 @@ function StepDetailPanel({
           {threshValue !== null && (
             <Row label="복수 승인자" value={threshValue} onTap={() => setThreshOpen(true)} />
           )}
-          <Row label="부재 시" value={absenceValue} onTap={() => setAbsenceOpen(true)} />
         </div>
 
         <div className="h-px bg-gray-100 mx-0" />
@@ -583,11 +576,6 @@ function StepDetailPanel({
         <OptionPicker title="단계 유형" options={typeOptions} value={step.type}
           onChange={(v) => { onUpdate({ type: v as StepType, members: [], threshold: 1 }); }}
           onClose={() => setTypeOpen(false)} />
-      )}
-      {absenceOpen && (
-        <OptionPicker title="부재 시" options={absenceOptions} value={step.absenceHandling}
-          onChange={(v) => onUpdate({ absenceHandling: v as AbsenceHandling })}
-          onClose={() => setAbsenceOpen(false)} />
       )}
       {threshOpen && (
         <OptionPicker title="복수 승인자" options={thresholdOptions} value={String(step.threshold)}
