@@ -1,0 +1,61 @@
+-- ============================================================
+-- ERP 거래처별 프로시저 패치 모음
+-- 앱 연동 시 거래처 ERP 프로시저에 추가/수정이 필요한 항목들
+-- ============================================================
+
+-- ─── usp_mobile_get_holiday_list — year_seq 컬럼 추가 ────────
+-- 목적: 연차 취소 버튼 표시 (year_seq가 null이면 취소 버튼 미표시)
+-- 대상: hrm_nw_yearhis 테이블에 year_seq 컬럼이 있는 거래처
+-- 확인 쿼리:
+--   SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+--   WHERE TABLE_NAME = 'hrm_nw_yearhis' AND COLUMN_NAME LIKE '%seq%'
+--
+-- 적용: SELECT 목록에 h.year_seq 추가
+--
+-- ALTER PROCEDURE [dbo].[usp_mobile_get_holiday_list]
+--  @p_corp_code varchar(10),
+--  @p_year      varchar(4),
+--  @p_emp_code  varchar(20)
+-- AS
+-- set nocount on;
+-- BEGIN TRY
+--  select
+--   h.emp_code,
+--   e.emp_name,
+--   nw.year_alday,
+--   isnull(nw.year_alday, 0) - isnull(nw.year_payday, 0) - isnull(a.sum_year_emday, 0) as year_reday,
+--   h.year_emday,
+--   mc.c_name as holiday_typ,
+--   h.year_bdate,
+--   h.year_edate,
+--   case when h.year_chk = 'N' then '신청' else '승인' end as app_status,
+--   h.year_chk,
+--   h.year_seq    -- ← 추가
+--  from hrm_nw_year nw
+--  inner join mst_emp e on (nw.emp_code = e.emp_code)
+--  left outer join hrm_nw_yearhis h on (nw.emp_code = h.emp_code and h.year_st = nw.year_st)
+--  left outer join mst_code mc on mc.c_id = 'HRM2_YEAR_TYPE' and mc.c_code = h.year_typ
+--  outer apply (select sum(x.year_emday) as sum_year_emday from hrm_nw_yearhis x where x.emp_code = h.emp_code and x.year_st = h.year_st) a
+--  outer apply (select sum(y.year_emday) as now_year_emday from hrm_nw_yearhis y where y.emp_code = h.emp_code and y.year_st = h.year_st and y.year_bdate <= h.year_bdate) b
+--  where
+--   nw.year_st = @p_year
+--  and e.corp_code in (select corp_code from dbo.rc_mst_corp_payroll(@p_corp_code))
+--  and (@p_emp_code = '' OR nw.emp_code = @p_emp_code)
+--  order by h.year_bdate, h.emp_code
+-- END TRY
+-- BEGIN CATCH
+--  select -1 as Flag, ERROR_MESSAGE() as MSG;
+-- END CATCH
+--
+-- 확인된 거래처: OIL_TEST (2026-09-07)
+-- ─────────────────────────────────────────────────────────────
+
+
+-- ─── usp_mobile_apvmng_emp_list — TOP 200 → TOP 1000 ────────
+-- 목적: 직원 200명 초과 거래처에서 승인자 선택 목록 누락 방지
+-- 증상: 직원이 목록에 안 보임 (ter_date=NULL인데도)
+-- 적용: SELECT TOP 200 → SELECT TOP 1000 으로 변경
+--
+-- approval-process.sql 의 usp_mobile_apvmng_emp_list 참고
+-- 확인된 거래처: OIL_TEST (2026-09-07, 직원 200명 초과)
+-- ─────────────────────────────────────────────────────────────

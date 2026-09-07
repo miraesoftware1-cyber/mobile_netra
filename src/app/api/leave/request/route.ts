@@ -64,14 +64,20 @@ export async function POST(request: NextRequest) {
 
   const { baseUrl } = resolved;
 
-  const params = new URLSearchParams({
+  const insertParams = new URLSearchParams({
     proc: 'usp_mobile_insert_holiday',
     param1: emp_code, param2: year, param3: leaveTypeCode,
     param4: appliedDate, param5: startDate, param6: endDate,
     param7: String(usedDays), param8: note, param9: reason, param10: phoneNumber,
   });
 
-  const insertRes = await fetch(`${baseUrl}/R2JsonProc.asp?${params.toString()}`).catch(() => null);
+  // insert_holiday와 process_get은 독립적이므로 병렬 호출
+  const procParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' });
+  const [insertRes, procRes] = await Promise.all([
+    fetch(`${baseUrl}/R2JsonProc.asp?${insertParams.toString()}`).catch(() => null),
+    fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' }),
+  ]);
+
   if (!insertRes?.ok) return NextResponse.json({ error: '연차 신청 중 오류가 발생했습니다.' }, { status: 502 });
 
   const insertData: InsertHolidayApiResponse = await insertRes.json();
@@ -81,10 +87,11 @@ export async function POST(request: NextRequest) {
 
   const yearSeq: number = Number((insertData.items)?.[0]?.YEAR_SEQ ?? 0);
 
-  // ── 동기: 절차 확인 + 승인 요청 생성 + req_id PG 저장 (취소 연동 보장) ──────
+  // ── 동기: 승인 요청 생성 + req_id PG 저장 (취소 연동 보장) ──────
   const setup = await prepareApproval({
     baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
     leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
+    prefetchedProcRes: procRes,
   });
 
   // ── after(): 승인자 등록 + 푸시 (느린 ERP 호출, 응답 후 실행) ───────────────
@@ -123,13 +130,17 @@ async function prepareApproval(args: {
   emp_code: string; emp_name: string; leaveTypeCode: string; leaveTypeName: string;
   appliedDate: string; startDate: string; endDate: string; usedDays: number;
   reason: string; note: string; yearSeq: number;
+  prefetchedProcRes?: Response | null;
 }): Promise<ApprovalSetup> {
   const { baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
-    leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq } = args;
+    leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
+    prefetchedProcRes } = args;
 
-  // 1. 절차 설정 조회
-  const procParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' });
-  const procRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' });
+  // 1. 절차 설정 조회 (prefetch된 경우 재사용)
+  const procRes = prefetchedProcRes ?? await fetchWithTimeout(
+    `${baseUrl}/R2JsonProc.asp?${new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' })}`,
+    { cache: 'no-store' },
+  );
   const procRaw = procRes?.ok ? await procRes.json().catch(() => null) : null;
   console.log('[approval] process_get Flag:', procRaw?.Flag);
 
@@ -232,35 +243,36 @@ async function sendNotifications(setup: ApprovalSetup) {
 
   const varArgs = { emp_name, emp_code, leaveTypeName, leaveTypeCode, startDate, endDate, usedDays, dpt_code };
 
-  // 그룹 멤버 실제 resolve (ERP 호출)
-  const resolvedApprovers: StepApprover[] = [];
-  for (const apv of stepApprovers) {
-    if (apv.apvType === 'GROUP') {
+  // 그룹 멤버 실제 resolve (ERP 호출) - 그룹들 병렬 조회
+  const groupApvs = stepApprovers.filter((a) => a.apvType === 'GROUP');
+  const nonGroupApvs = stepApprovers.filter((a) => a.apvType !== 'GROUP');
+
+  const groupResults = await Promise.all(
+    groupApvs.map(async (apv) => {
       const p = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_members', param1: apv.empCode });
       const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
       const d = await r?.json().catch(() => null);
       const members: Array<{ EMP_CODE: string }> = d?.items ?? [];
-      if (members.length === 0) {
-        resolvedApprovers.push(apv);
-      } else {
-        for (const m of members) resolvedApprovers.push({ ...apv, empCode: m.EMP_CODE, userId: m.EMP_CODE });
-      }
-    } else {
-      resolvedApprovers.push(apv);
-    }
-  }
+      return members.length === 0
+        ? [apv]
+        : members.map((m) => ({ ...apv, empCode: m.EMP_CODE, userId: m.EMP_CODE }));
+    }),
+  );
+  const resolvedApprovers: StepApprover[] = [...nonGroupApvs, ...groupResults.flat()];
 
-  // 단계별 승인자 ERP 등록
-  for (const apv of resolvedApprovers) {
-    const p = new URLSearchParams({
-      proc: 'usp_mobile_apvmng_step_apv_add',
-      param1: String(reqId), param2: String(apv.stepNo),
-      param3: apv.apvType, param4: apv.empCode, param5: String(apv.threshold),
-    });
-    const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
-    const d = await r?.json().catch(() => null);
-    console.log('[approval] step_apv_add', apv.empCode, 'Flag:', d?.Flag);
-  }
+  // 단계별 승인자 ERP 등록 - 병렬 호출
+  await Promise.allSettled(
+    resolvedApprovers.map(async (apv) => {
+      const p = new URLSearchParams({
+        proc: 'usp_mobile_apvmng_step_apv_add',
+        param1: String(reqId), param2: String(apv.stepNo),
+        param3: apv.apvType, param4: apv.empCode, param5: String(apv.threshold),
+      });
+      const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
+      const d = await r?.json().catch(() => null);
+      console.log('[approval] step_apv_add', apv.empCode, 'Flag:', d?.Flag);
+    }),
+  );
 
   // 1단계 승인자 구독 조회 + 푸시
   const step1Approvers = resolvedApprovers.filter((a) => a.stepNo === 1);

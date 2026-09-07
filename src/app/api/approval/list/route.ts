@@ -38,16 +38,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
   }
 
-  const resolved = await resolveCompanyErpBaseUrl(companyCode);
+  // ERP baseUrl 조회와 PG actedKeys 조회 병렬 실행
+  const [resolved, actedResult] = await Promise.all([
+    resolveCompanyErpBaseUrl(companyCode),
+    query<{ req_id: number; step_no: number }>(
+      `SELECT req_id, step_no FROM netra_apvmng_actions WHERE apv_code = $1`,
+      [empCode],
+    ).catch(() => ({ rows: [] as { req_id: number; step_no: number }[] })),
+  ]);
+
   if (resolved.status !== 'ok') {
     return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   }
   const { baseUrl } = resolved;
 
-  // userId(그룹 등록 시)와 empCode(개인 등록 시) 둘 다 조회 후 합산 (중복 제거)
+  // userId(그룹 등록 시)와 empCode(개인 등록 시) 둘 다 병렬 조회 후 중복 제거
   async function fetchMerged(status: string) {
-    const byUserId  = erpId !== empCode ? await fetchErpList(baseUrl, erpId, status)  : [];
-    const byEmpCode = await fetchErpList(baseUrl, empCode, status);
+    const [byUserId, byEmpCode] = await Promise.all([
+      erpId !== empCode ? fetchErpList(baseUrl, erpId, status) : Promise.resolve([]),
+      fetchErpList(baseUrl, empCode, status),
+    ]);
     const seen = new Set<number>();
     return [...byUserId, ...byEmpCode].filter((r) => {
       if (seen.has(r.REQ_ID)) return false;
@@ -56,17 +66,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // PG에서 이미 처리한 (req_id, step_no) 쌍 조회 — 단계별로 체크해야 다단계 승인자 누락 방지
+  // PG에서 이미 처리한 (req_id, step_no) 쌍 — baseUrl 조회와 병렬로 이미 실행됨
   let actedKeys: Set<string> = new Set();
-  let actedReqIds: Set<number> = new Set(); // 처리완료 탭용
-  try {
-    const { rows } = await query<{ req_id: number; step_no: number }>(
-      `SELECT req_id, step_no FROM netra_apvmng_actions WHERE apv_code = $1`,
-      [empCode],
-    );
-    actedKeys  = new Set(rows.map((r) => `${r.req_id}:${r.step_no}`));
+  let actedReqIds: Set<number> = new Set();
+  {
+    const rows = actedResult.rows;
+    actedKeys   = new Set(rows.map((r) => `${r.req_id}:${r.step_no}`));
     actedReqIds = new Set(rows.map((r) => Number(r.req_id)));
-  } catch { /* 무시 */ }
+  }
 
   if (status === 'PENDING') {
     // ERP PENDING 목록에서 현재 단계를 이미 처리한 항목 및 취소된 항목 제외

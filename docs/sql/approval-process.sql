@@ -470,7 +470,7 @@ AS
 BEGIN
     SET NOCOUNT ON
 
-    SELECT TOP 200
+    SELECT TOP 1000
         e.emp_code  AS EMP_CODE,
         e.emp_name  AS EMP_NAME,
         ISNULL(d.dpt_name, '') AS DPT_NAME
@@ -552,6 +552,79 @@ BEGIN
     WHERE USER_GROUP = @PARAM1
       AND USER_TYPE = 'U'
     ORDER BY USER_ID
+END
+GO
+
+-- ─── 단계 상태 조회 (THRESHOLD 포함) ────────────────────────────
+-- 호출: param1=REQ_ID, param2=USER_ID(ERP 로그인 ID)
+-- 반환: CURRENT_STEP, TOTAL_STEPS, STATUS, THRESHOLD
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_step_state' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_step_state
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_step_state
+    @REQ_ID  INT,
+    @USER_ID NVARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON
+
+    SELECT
+        '0'             AS Flag,
+        ''              AS MSG,
+        R.CURRENT_STEP,
+        R.TOTAL_STEPS,
+        R.STATUS,
+        ISNULL(SA.THRESHOLD, 1) AS THRESHOLD
+    FROM TB_MOBILE_APVMNG_REQUEST R WITH(NOLOCK)
+    LEFT JOIN TB_MOBILE_APVMNG_STEP_APV SA WITH(NOLOCK)
+        ON SA.REQ_ID  = R.REQ_ID
+        AND SA.STEP_NO = R.CURRENT_STEP
+        AND SA.EMP_CODE = @USER_ID
+    WHERE R.REQ_ID = @REQ_ID
+END
+GO
+
+-- ─── 단계 상태 업데이트 (승인/반려/다음단계 이동) ────────────────
+-- 호출: param1=REQ_ID, param2=STATUS(APPROVED/REJECTED/PENDING), param3=STEP_NO
+-- STATUS=PENDING이고 STEP_NO가 현재보다 크면 다음 단계로 이동
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_set_step' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_set_step
+GO
+
+CREATE PROCEDURE usp_mobile_apvmng_set_step
+    @REQ_ID   INT,
+    @STATUS   NVARCHAR(20),   -- APPROVED / REJECTED / PENDING
+    @STEP_NO  INT             -- 다음 단계 번호 (PENDING 이동 시) 또는 현재 단계
+AS
+BEGIN
+    SET NOCOUNT ON
+
+    BEGIN TRY
+        IF @STATUS = 'PENDING'
+        BEGIN
+            -- 다음 단계로 이동
+            UPDATE TB_MOBILE_APVMNG_REQUEST
+            SET CURRENT_STEP = @STEP_NO,
+                UPD_DT       = GETDATE()
+            WHERE REQ_ID = @REQ_ID
+        END
+        ELSE
+        BEGIN
+            -- 최종 승인 또는 반려
+            UPDATE TB_MOBILE_APVMNG_REQUEST
+            SET STATUS  = @STATUS,
+                UPD_DT  = GETDATE()
+            WHERE REQ_ID = @REQ_ID
+        END
+
+        SELECT '0' AS Flag, '' AS MSG
+    END TRY
+    BEGIN CATCH
+        SELECT '1' AS Flag, ERROR_MESSAGE() AS MSG
+    END CATCH
 END
 GO
 
