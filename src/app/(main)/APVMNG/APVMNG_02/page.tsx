@@ -59,7 +59,7 @@ const ABSENCE_LABELS: Record<AbsenceHandling, string> = {
 
 const STEP_TYPE_LABELS: Record<StepType, string> = {
   individual: "개인",
-  group:      "합의",
+  group:      "그룹",
   dept_head:  "부서장",
 };
 
@@ -104,7 +104,7 @@ function stepDisplayName(step: Step): string {
 
 function stepSummary(step: Step, stepNo: number): string {
   const parts: string[] = [];
-  parts.push(step.type === "group" ? "합의" : "승인");
+  parts.push(step.type === "group" ? "그룹" : "승인");
   if (step.type === "group" && step.members.length > 1)
     parts.push(`${step.threshold}명 승인`);
   if (step.absenceHandling !== "none")
