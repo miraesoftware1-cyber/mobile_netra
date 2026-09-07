@@ -140,6 +140,7 @@ export default function MenuPage() {
       items: [
         { key: "APVMNG_01", title: "승인 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_01" },
         { key: "APVMNG_02", title: "승인 절차 설정", icon: Settings, href: "/APVMNG/APVMNG_02" },
+        { key: "APVMNG_03", title: "승인 절차 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_03" },
       ],
     },
   ];
