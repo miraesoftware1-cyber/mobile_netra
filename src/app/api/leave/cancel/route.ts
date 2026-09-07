@@ -93,10 +93,11 @@ export async function POST(request: NextRequest) {
 
       // PG에 취소된 req_id 기록 (대기중 목록 필터링용)
       await ensureCancelledTable();
-      await query(
+      const insertResult = await query(
         `INSERT INTO netra_cancelled_reqs (req_id) VALUES ($1) ON CONFLICT DO NOTHING`,
         [reqId],
-      ).catch(() => null);
+      ).catch((e) => { console.error('[cancel] netra_cancelled_reqs 삽입 오류:', e); return null; });
+      console.log('[cancel] netra_cancelled_reqs 삽입 완료, req_id:', reqId, 'rowCount:', insertResult?.rowCount);
 
       // 현재 단계 승인자에게 취소 푸시 발송
       if (corpCode) {

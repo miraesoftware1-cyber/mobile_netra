@@ -65,10 +65,12 @@ export async function GET(request: NextRequest) {
         `SELECT req_id FROM netra_cancelled_reqs`,
       );
       cancelledReqIds = new Set(cRows.map((r) => Number(r.req_id)));
+      if (cancelledReqIds.size > 0) console.log('[approval/list] 취소된 req_ids:', [...cancelledReqIds]);
     } catch { /* 테이블 없으면 무시 */ }
     const filtered = items.filter((item) =>
       !actedKeys.has(`${item.REQ_ID}:${item.CURRENT_STEP}`) && !cancelledReqIds.has(item.REQ_ID)
     );
+    console.log('[approval/list] ERP PENDING:', items.length, '→ 필터 후:', filtered.length);
 
     // PG에서 현재 단계 승인 수 조회
     if (filtered.length > 0) {
