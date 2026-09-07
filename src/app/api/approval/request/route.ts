@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     if (step1EmpCodes.length > 0) {
       const placeholders = step1EmpCodes.map((_, i) => `$${i + 2}`).join(',');
       const { rows: subscribers } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-        `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
+        `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
         [corpCode, ...step1EmpCodes],
       );
 

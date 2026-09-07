@@ -57,7 +57,7 @@ async function pushToEmps(
   try {
     const placeholders = empCodes.map((_, i) => `$${i + 2}`).join(',');
     const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-      `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
+      `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
       [corpCode, ...empCodes],
     );
     await Promise.allSettled(
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
       if (nextUserIds.length > 0) {
         const ph = nextUserIds.map((_, i) => `$${i + 2}`).join(',');
         const { rows: nextSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-          `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND user_id IN (${ph})`,
+          `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
           [corpCode, ...nextUserIds],
         );
         await Promise.allSettled(nextSubs.map((row) =>

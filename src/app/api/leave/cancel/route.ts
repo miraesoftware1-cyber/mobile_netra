@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
           if (approverCodes.length > 0) {
             const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
             const { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
-              `SELECT subscription FROM netra_push_subscriptions WHERE corp_code = $1 AND user_id IN (${ph})`,
+              `SELECT subscription FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
               [corpCode, ...approverCodes],
             );
             console.log('[cancel] 취소 푸시 대상:', subs.length, '명');

@@ -154,7 +154,7 @@ async function prepareApproval(args: {
     } else if (step.type === 'dept_head') {
       // 부서장은 PG에서 즉시 조회 (빠름)
       const { rows: heads } = await query<{ emp_code: string }>(
-        `SELECT emp_code FROM netra_push_subscriptions WHERE corp_code = $1 AND manage_dpt_codes LIKE $2`,
+        `SELECT emp_code FROM netra_push_subs WHERE corp_code = $1 AND manage_dpt_codes LIKE $2`,
         [corp_code, `%${dpt_code}%`],
       ).catch(() => ({ rows: [] as { emp_code: string }[] }));
       for (const h of heads) {
@@ -211,7 +211,7 @@ async function sendNotifications(setup: ApprovalSetup) {
   if (setup.kind === 'fallback') {
     const { corp_code, dpt_code, emp_code, emp_name } = setup;
     const { rows } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string }>(
-      `SELECT subscription, manage_dpt_codes FROM netra_push_subscriptions WHERE corp_code = $1`,
+      `SELECT subscription, manage_dpt_codes FROM netra_push_subs WHERE corp_code = $1`,
       [corp_code],
     );
     const targets = rows.filter((r) =>
@@ -273,7 +273,7 @@ async function sendNotifications(setup: ApprovalSetup) {
   if (groupIds.length > 0) {
     const ph = groupIds.map((_, i) => `$${i+2}`).join(',');
     const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-      `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code=$1 AND user_id IN (${ph})`,
+      `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code=$1 AND user_id IN (${ph})`,
       [corp_code, ...groupIds],
     );
     console.log('[push] user_id 조회 결과:', rows.length, '건, emp_codes:', rows.map(r=>r.emp_code));
@@ -282,7 +282,7 @@ async function sendNotifications(setup: ApprovalSetup) {
   if (deptCodes.length > 0) {
     const ph = deptCodes.map((_, i) => `$${i+2}`).join(',');
     const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-      `SELECT subscription, emp_code FROM netra_push_subscriptions WHERE corp_code=$1 AND emp_code IN (${ph})`,
+      `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
       [corp_code, ...deptCodes],
     );
     console.log('[push] emp_code 조회 결과:', rows.length, '건');
@@ -293,7 +293,7 @@ async function sendNotifications(setup: ApprovalSetup) {
   if (subs.length === 0 && groupIds.length > 0) {
     const ph = groupIds.map((_, i) => `$${i+1}`).join(',');
     const { rows: allRows } = await query<{ subscription: webpush.PushSubscription; emp_code: string; corp_code: string; user_id: string }>(
-      `SELECT subscription, emp_code, corp_code, user_id FROM netra_push_subscriptions WHERE user_id IN (${ph})`,
+      `SELECT subscription, emp_code, corp_code, user_id FROM netra_push_subs WHERE user_id IN (${ph})`,
       groupIds,
     );
     console.log('[push] corp_code 없이 user_id 조회:', allRows.map(r=>({ emp_code: r.emp_code, corp_code: r.corp_code, user_id: r.user_id })));

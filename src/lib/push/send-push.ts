@@ -37,6 +37,10 @@ export async function sendPushNotification(
     const status = (err as { statusCode?: number })?.statusCode;
     if (status === 410 || status === 404) {
       await query(
+        `DELETE FROM netra_push_subs WHERE endpoint = $1`,
+        [subscription.endpoint],
+      ).catch(() => null);
+      await query(
         `DELETE FROM netra_push_subscriptions WHERE subscription->>'endpoint' = $1`,
         [subscription.endpoint],
       ).catch(() => null);

@@ -30,10 +30,9 @@ export function usePushSubscription() {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") return;
 
-        // 기존 구독 해제 후 새 키로 재구독 (VAPID 키 변경 대응)
+        // 기존 구독 재사용 (매 이동마다 새 엔드포인트 생성 방지)
         const existing = await reg.pushManager.getSubscription();
-        if (existing) await existing.unsubscribe();
-        const sub = await reg.pushManager.subscribe({
+        const sub = existing ?? await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         });

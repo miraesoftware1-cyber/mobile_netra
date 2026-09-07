@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
               COALESCE(ps.user_id, a.apv_code) AS user_id,
               a.action, COALESCE(a.comment, '') AS comment, a.created_at
        FROM netra_apvmng_actions a
-       LEFT JOIN netra_push_subscriptions ps ON ps.emp_code = a.apv_code
+       LEFT JOIN netra_push_subs ps ON ps.emp_code = a.apv_code
        WHERE a.req_id = $1 ORDER BY a.created_at ASC`,
       [reqId],
     );
