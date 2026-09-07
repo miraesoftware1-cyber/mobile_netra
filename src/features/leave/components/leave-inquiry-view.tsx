@@ -116,7 +116,7 @@ export function LeaveInquiryView() {
       cancelLeave(
         user!.companyCode,
         user!.emp_code,
-        row.year_st ?? String(baseYear),
+        row.year_bdate?.slice(0, 4) ?? String(baseYear),
         row.year_seq!,
       ),
     onSuccess: (result) => {

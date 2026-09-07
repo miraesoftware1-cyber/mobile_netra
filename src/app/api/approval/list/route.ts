@@ -57,9 +57,18 @@ export async function GET(request: NextRequest) {
   } catch { /* 무시 */ }
 
   if (status === 'PENDING') {
-    // ERP PENDING 목록에서 현재 단계를 이미 처리한 항목만 제외
+    // ERP PENDING 목록에서 현재 단계를 이미 처리한 항목 및 취소된 항목 제외
     const items = await fetchErpList(baseUrl, erpId, 'PENDING');
-    const filtered = items.filter((item) => !actedKeys.has(`${item.REQ_ID}:${item.CURRENT_STEP}`));
+    let cancelledReqIds: Set<number> = new Set();
+    try {
+      const { rows: cRows } = await query<{ req_id: number }>(
+        `SELECT req_id FROM netra_cancelled_reqs`,
+      );
+      cancelledReqIds = new Set(cRows.map((r) => Number(r.req_id)));
+    } catch { /* 테이블 없으면 무시 */ }
+    const filtered = items.filter((item) =>
+      !actedKeys.has(`${item.REQ_ID}:${item.CURRENT_STEP}`) && !cancelledReqIds.has(item.REQ_ID)
+    );
 
     // PG에서 현재 단계 승인 수 조회
     if (filtered.length > 0) {
