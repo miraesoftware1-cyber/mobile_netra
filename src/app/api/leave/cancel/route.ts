@@ -94,17 +94,6 @@ export async function POST(request: NextRequest) {
     if (rows.length > 0) {
       const { req_id: reqId, corp_code: corpCode, req_emp_name: reqEmpName } = rows[0];
 
-      // ERP 승인 요청 상태를 REJECTED로 변경 (CANCELLED는 미지원)
-      const setStepParams = new URLSearchParams({
-        proc:   'usp_mobile_apvmng_set_step',
-        param1: String(reqId),
-        param2: 'REJECTED',
-        param3: '1',
-      });
-      const setStepRes = await fetch(`${baseUrl}/R2JsonProc.asp?${setStepParams}`).catch(() => null);
-      const setStepData = await setStepRes?.json().catch(() => null);
-      console.log('[cancel] set_step 결과:', setStepData?.Flag, setStepData?.MSG);
-
       // PG에 취소된 req_id 기록 (대기중 목록 필터링용)
       await ensureCancelledTable();
       const insertResult = await query(
@@ -113,7 +102,7 @@ export async function POST(request: NextRequest) {
       ).catch((e) => { console.error('[cancel] netra_cancelled_reqs 삽입 오류:', e); return null; });
       console.log('[cancel] netra_cancelled_reqs 삽입 완료, req_id:', reqId, 'rowCount:', insertResult?.rowCount);
 
-      // 현재 단계 승인자에게 취소 푸시 발송
+      // 현재 단계 승인자에게 취소 푸시 발송 (set_step 이전에 조회해야 함)
       if (corpCode) {
         try {
           // 현재 단계 조회
@@ -137,13 +126,16 @@ export async function POST(request: NextRequest) {
             .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
             .filter(Boolean);
 
+          console.log('[cancel] currentStep:', currentStep, 'approverCodes:', approverCodes);
+
           if (approverCodes.length > 0) {
             const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
             const { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
               `SELECT subscription FROM netra_push_subscriptions WHERE corp_code = $1 AND user_id IN (${ph})`,
               [corpCode, ...approverCodes],
             );
-            await Promise.allSettled(
+            console.log('[cancel] 취소 푸시 대상:', subs.length, '명');
+            const pushResults = await Promise.allSettled(
               subs.map((row) =>
                 sendPushNotification(row.subscription, {
                   title: '연차 신청 취소',
@@ -153,11 +145,28 @@ export async function POST(request: NextRequest) {
                 }),
               ),
             );
+            pushResults.forEach((r, i) => {
+              if (r.status === 'rejected') console.error('[cancel] 푸시 실패:', r.reason);
+              else console.log('[cancel] 푸시 성공 idx:', i);
+            });
+          } else {
+            console.log('[cancel] 승인자 없음 - 취소 푸시 미발송');
           }
         } catch (err) {
           console.error('[cancel] 취소 푸시 실패:', err);
         }
       }
+
+      // ERP 승인 요청 상태를 REJECTED로 변경 (CANCELLED는 미지원)
+      const setStepParams = new URLSearchParams({
+        proc:   'usp_mobile_apvmng_set_step',
+        param1: String(reqId),
+        param2: 'REJECTED',
+        param3: '1',
+      });
+      const setStepRes = await fetch(`${baseUrl}/R2JsonProc.asp?${setStepParams}`).catch(() => null);
+      const setStepData = await setStepRes?.json().catch(() => null);
+      console.log('[cancel] set_step 결과:', setStepData?.Flag, setStepData?.MSG);
 
       // PG 액션·요청 매핑 정리
       await query(`DELETE FROM netra_apvmng_actions  WHERE req_id=$1`, [reqId]).catch(() => null);
