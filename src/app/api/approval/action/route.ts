@@ -228,13 +228,20 @@ export async function POST(request: NextRequest) {
       const nextUserIds: string[] = (apvData?.items ?? [])
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
-      // 다음 단계 승인자는 USER_ID로 등록되어 있으므로 user_id 컬럼으로 조회
       if (nextUserIds.length > 0) {
         const ph = nextUserIds.map((_, i) => `$${i + 2}`).join(',');
-        const { rows: nextSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+        // user_id로 먼저 조회, 없으면 emp_code로 폴백 (user_id ≠ emp_code인 거래처 대응)
+        let { rows: nextSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
           `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
           [corpCode, ...nextUserIds],
         );
+        if (nextSubs.length === 0) {
+          const { rows: empSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+            `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
+            [corpCode, ...nextUserIds],
+          );
+          nextSubs = empSubs;
+        }
         await Promise.allSettled(nextSubs.map((row) =>
           sendPushNotification(row.subscription, {
             title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,

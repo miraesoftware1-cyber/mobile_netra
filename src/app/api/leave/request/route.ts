@@ -289,15 +289,15 @@ async function sendNotifications(setup: ApprovalSetup) {
     subs = [...subs, ...rows];
   }
 
-  // 구독자 없으면 corp_code 무시하고 user_id만으로 재시도
+  // 구독자 없으면 emp_code로 재시도 (user_id ≠ emp_code인 거래처 대응)
   if (subs.length === 0 && groupIds.length > 0) {
-    const ph = groupIds.map((_, i) => `$${i+1}`).join(',');
-    const { rows: allRows } = await query<{ subscription: webpush.PushSubscription; emp_code: string; corp_code: string; user_id: string }>(
-      `SELECT subscription, emp_code, corp_code, user_id FROM netra_push_subs WHERE user_id IN (${ph})`,
-      groupIds,
+    const ph = groupIds.map((_, i) => `$${i+2}`).join(',');
+    const { rows: empRows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
+      `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
+      [corp_code, ...groupIds],
     );
-    console.log('[push] corp_code 없이 user_id 조회:', allRows.map(r=>({ emp_code: r.emp_code, corp_code: r.corp_code, user_id: r.user_id })));
-    subs = [...subs, ...allRows];
+    console.log('[push] emp_code 폴백 조회:', empRows.length, '건');
+    subs = [...subs, ...empRows];
   }
 
   if (subs.length === 0) {
