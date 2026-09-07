@@ -618,32 +618,49 @@ export function LeaveRequestForm() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 신청 결과 다이얼로그 */}
-      <AlertDialog
-        open={resultDialog.open}
-        onOpenChange={(open) => setResultDialog((prev) => ({ ...prev, open }))}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-center">
-              {resultDialog.success ? "신청 완료" : "신청 실패"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              {resultDialog.message}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => {
-                setResultDialog((prev) => ({ ...prev, open: false }));
-                if (resultDialog.success) router.back();
-              }}
-            >
-              확인
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* 신청 결과 모달 */}
+      {resultDialog.open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-6 bg-black/50">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl">
+            {/* 상단 아이콘 영역 */}
+            <div className={`flex flex-col items-center justify-center pt-10 pb-6 px-6 ${resultDialog.success ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${resultDialog.success ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                {resultDialog.success ? (
+                  <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <h2 className={`text-xl font-bold ${resultDialog.success ? 'text-emerald-700' : 'text-red-700'}`}>
+                {resultDialog.success ? '신청 완료!' : '신청 실패'}
+              </h2>
+            </div>
+            {/* 메시지 */}
+            <div className="px-6 py-5 text-center">
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {resultDialog.message || (resultDialog.success ? '연차 신청이 완료되었습니다.' : '다시 시도해 주세요.')}
+              </p>
+            </div>
+            {/* 버튼 */}
+            <div className="px-6 pb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setResultDialog((prev) => ({ ...prev, open: false }));
+                  if (resultDialog.success) router.back();
+                }}
+                className={`w-full h-12 rounded-2xl text-sm font-semibold text-white transition-opacity active:opacity-80 ${resultDialog.success ? 'bg-emerald-500' : 'bg-red-500'}`}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
