@@ -414,7 +414,7 @@ function PushSettingsScreen({
                 onClick={() => setUseButtons((v) => !v)}
                 className={`w-12 h-6 rounded-full transition-colors flex-shrink-0 ${useButtons ? "bg-primary" : "bg-gray-300"}`}
               >
-                <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${useButtons ? "translate-x-6.5" : "translate-x-0.5"}`} />
+                <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${useButtons ? "translate-x-[26px]" : "translate-x-[2px]"}`} />
               </button>
             </div>
 
@@ -535,7 +535,7 @@ function StepDetailPanel({
           onClick={() => onChange(!value)}
           className={`w-12 h-6 rounded-full transition-colors flex-shrink-0 ${value ? "bg-primary" : "bg-gray-300"}`}
         >
-          <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${value ? "translate-x-6.5" : "translate-x-0.5"}`} />
+          <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${value ? "translate-x-[26px]" : "translate-x-[2px]"}`} />
         </button>
       </div>
     );
