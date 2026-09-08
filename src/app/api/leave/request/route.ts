@@ -4,7 +4,7 @@ import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { isInQuietHours } from '@/lib/push/quiet-hours';
+import { isInQuietHours, ensureQuietHoursCols } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 
 const requestSchema = z.object({
@@ -220,6 +220,7 @@ async function prepareApproval(args: {
 }
 
 async function sendNotifications(setup: ApprovalSetup) {
+  await ensureQuietHoursCols();
   if (setup.kind === 'fallback') {
     const { corp_code, dpt_code, emp_code, emp_name } = setup;
     const { rows } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string; quiet_enabled: boolean | null; quiet_start: string | null; quiet_end: string | null }>(

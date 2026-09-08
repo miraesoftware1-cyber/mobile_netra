@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { isInQuietHours } from '@/lib/push/quiet-hours';
+import { isInQuietHours, ensureQuietHoursCols } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 import webpush from 'web-push';
 
@@ -55,6 +55,7 @@ async function pushToEmps(
   approvalMeta?: { companyCode: string; corpCode: string },
 ) {
   if (empCodes.length === 0) return;
+  await ensureQuietHoursCols();
   try {
     const placeholders = empCodes.map((_, i) => `$${i + 2}`).join(',');
     const { rows } = await query<{

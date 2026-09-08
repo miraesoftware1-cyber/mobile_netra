@@ -3,7 +3,7 @@ import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { isInQuietHours } from '@/lib/push/quiet-hours';
+import { isInQuietHours, ensureQuietHoursCols } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 
 const schema = z.object({
@@ -126,6 +126,7 @@ async function postCancelCleanup(
     return;
   }
 
+  await ensureQuietHoursCols();
   const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
   type SubRow = { subscription: webpush.PushSubscription; quiet_enabled: boolean | null; quiet_start: string | null; quiet_end: string | null };
 
