@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
      WHERE corp_code=$3 AND (emp_code=$1 OR user_id=$1 OR emp_code=$2 OR user_id=$2)
      ORDER BY updated_at DESC LIMIT 1`,
     [empCode, userId || empCode, corpCode],
-  ).catch(() => ({ rows: [] }));
+  ).catch((e) => { console.error('[quiet-hours GET] query error:', e); return { rows: [] }; });
+
+  console.log('[quiet-hours GET] empCode:', empCode, 'userId:', userId, 'corpCode:', corpCode, '→ rows:', rows.length, 'enabled:', rows[0]?.quiet_enabled);
 
   return NextResponse.json({
     enabled: rows[0]?.quiet_enabled ?? false,
@@ -58,12 +60,13 @@ export async function PUT(request: NextRequest) {
 
   await ensureQuietHoursCols();
   // emp_code 또는 user_id 둘 다 체크 (user_id ≠ emp_code 거래처 대응)
-  await query(
+  const result = await query(
     `UPDATE netra_push_subs
      SET quiet_enabled=$4, quiet_start=$5, quiet_end=$6
      WHERE corp_code=$3 AND (emp_code=$1 OR user_id=$1 OR emp_code=$2 OR user_id=$2)`,
     [empCode, userId || empCode, corpCode, enabled, start, end],
   );
+  console.log('[quiet-hours PUT] empCode:', empCode, 'userId:', userId, 'corpCode:', corpCode, 'enabled:', enabled, '→ rowCount:', result.rowCount);
 
   return NextResponse.json({ success: true });
 }

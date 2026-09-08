@@ -78,6 +78,7 @@ export async function validateSmsCode(
     }
 
     await query(`DELETE FROM netra_sms_otp_codes WHERE phone_number = $1`, [phoneNumber]);
+    await query(`DELETE FROM netra_sms_rate_limits WHERE phone_number = $1`, [phoneNumber]).catch(() => null);
     return { success: true };
   } catch (err) {
     console.error("[validateSmsCode] PostgreSQL 오류:", err);
