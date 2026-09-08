@@ -4,7 +4,7 @@ import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { filterActiveSubscriptions } from '@/lib/push/quiet-hours';
+import { categorizeSubscriptions } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 
 const requestSchema = z.object({
@@ -229,14 +229,12 @@ async function sendNotifications(setup: ApprovalSetup) {
     const dptRows = rows.filter((r) =>
       r.manage_dpt_codes?.split(',').map((c) => c.trim()).includes(dpt_code),
     );
-    const targets = await filterActiveSubscriptions(dptRows, corp_code);
-    await Promise.allSettled(targets.map((r) =>
-      sendPushNotification(r.subscription, {
-        title: '연차 신청 알림',
-        body: `${emp_name || emp_code}님이 연차를 신청했습니다.`,
-        url: '/LEAVE/LEAVE_02', tag: 'leave-request',
-      }),
-    ));
+    const { active: dptActive, silent: dptSilent } = await categorizeSubscriptions(dptRows, corp_code);
+    const basePayload = { title: '연차 신청 알림', body: `${emp_name || emp_code}님이 연차를 신청했습니다.`, url: '/LEAVE/LEAVE_02', tag: 'leave-request' };
+    await Promise.allSettled([
+      ...dptActive.map((r) => sendPushNotification(r.subscription, basePayload)),
+      ...dptSilent.map((r) => sendPushNotification(r.subscription, { ...basePayload, silent: true })),
+    ]);
     return;
   }
 
@@ -315,28 +313,32 @@ async function sendNotifications(setup: ApprovalSetup) {
     subs = [...subs, ...empRows];
   }
 
-  const activeSubs = await filterActiveSubscriptions(subs, corp_code);
+  const { active: activeSubs, silent: silentSubs } = await categorizeSubscriptions(subs, corp_code);
 
-  if (activeSubs.length === 0) {
-    console.log('[push] 구독자 없음(무음 포함) - 푸시 미발송');
+  if (activeSubs.length + silentSubs.length === 0) {
+    console.log('[push] 구독자 없음 - 푸시 미발송');
     return;
   }
 
-  console.log('[push] 푸시 발송:', activeSubs.length, '명');
+  console.log('[push] 푸시 발송 (일반:', activeSubs.length, '/ 무음:', silentSubs.length, ')');
 
   const msgTitle = replaceVars(step1Config?.messageTitle ?? '연차 신청 알림', varArgs);
   const msgBody  = replaceVars(step1Config?.messageBody  ?? '{신청자}님이 연차를 신청했습니다.', varArgs);
 
-  const results = await Promise.allSettled(activeSubs.map((row) =>
-    sendPushNotification(row.subscription, {
-      title: msgTitle, body: msgBody,
-      url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
-      tag: `approval-${reqId}`,
-      approvalAction: { reqId, companyCode, corpCode: corp_code, empCode: row.emp_code, empName: '' },
-    }),
+  const makePayload = (row: SubRow, isSilent: boolean) => ({
+    title: msgTitle, body: msgBody,
+    url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
+    tag: `approval-${reqId}`,
+    ...(isSilent ? { silent: true as const } : {}),
+    approvalAction: { reqId, companyCode, corpCode: corp_code, empCode: row.emp_code, empName: '' },
+  });
+
+  const allSubs = [...activeSubs.map(r => ({ row: r, silent: false })), ...silentSubs.map(r => ({ row: r, silent: true }))];
+  const results = await Promise.allSettled(allSubs.map(({ row, silent }) =>
+    sendPushNotification(row.subscription, makePayload(row, silent)),
   ));
   results.forEach((r, i) => {
-    if (r.status === 'rejected') console.error('[push] 발송 실패 emp_code:', activeSubs[i].emp_code, r.reason);
-    else console.log('[push] 발송 성공 emp_code:', activeSubs[i].emp_code);
+    if (r.status === 'rejected') console.error('[push] 발송 실패 emp_code:', allSubs[i].row.emp_code, r.reason);
+    else console.log('[push] 발송 성공 emp_code:', allSubs[i].row.emp_code, allSubs[i].silent ? '(무음)' : '');
   });
 }

@@ -39,12 +39,16 @@ export function isInQuietHours(
   return current >= start && current < end;
 }
 
-/** 무음 알림 설정 기준으로 구독 목록을 필터링합니다 (netra_user_prefs 기준). */
-export async function filterActiveSubscriptions<T extends { emp_code: string; user_id?: string | null }>(
+/**
+ * 구독 목록을 무음/일반으로 분류합니다 (netra_user_prefs 기준).
+ * - active: 정상 알림 대상
+ * - silent: 무음 알림 시간대 → silent: true 페이로드로 발송
+ */
+export async function categorizeSubscriptions<T extends { emp_code: string; user_id?: string | null }>(
   subs: T[],
   corpCode: string,
-): Promise<T[]> {
-  if (subs.length === 0) return [];
+): Promise<{ active: T[]; silent: T[] }> {
+  if (subs.length === 0) return { active: [], silent: [] };
   await ensurePrefsTable();
 
   const codes = [...new Set([
@@ -54,11 +58,11 @@ export async function filterActiveSubscriptions<T extends { emp_code: string; us
   const ph = codes.map((_, i) => `$${i + 2}`).join(',');
 
   const { rows } = await query<{
-    emp_code:     string;
-    user_id:      string | null;
+    emp_code:      string;
+    user_id:       string | null;
     quiet_enabled: boolean;
-    quiet_start:  string | null;
-    quiet_end:    string | null;
+    quiet_start:   string | null;
+    quiet_end:     string | null;
   }>(
     `SELECT emp_code, user_id, quiet_enabled, quiet_start, quiet_end
      FROM netra_user_prefs
@@ -66,12 +70,20 @@ export async function filterActiveSubscriptions<T extends { emp_code: string; us
     [corpCode, ...codes],
   ).catch(() => ({ rows: [] }));
 
-  return subs.filter(s => {
+  const active: T[] = [];
+  const silent: T[] = [];
+
+  for (const s of subs) {
     const pref = rows.find(p =>
       p.emp_code === s.emp_code || p.emp_code === s.user_id ||
       (p.user_id && (p.user_id === s.emp_code || p.user_id === s.user_id))
     );
-    if (!pref) return true; // 설정 없으면 푸시 허용
-    return !isInQuietHours(pref.quiet_start, pref.quiet_end, pref.quiet_enabled);
-  });
+    if (pref && isInQuietHours(pref.quiet_start, pref.quiet_end, pref.quiet_enabled)) {
+      silent.push(s);
+    } else {
+      active.push(s);
+    }
+  }
+
+  return { active, silent };
 }

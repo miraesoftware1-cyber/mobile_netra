@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { filterActiveSubscriptions } from '@/lib/push/quiet-hours';
+import { categorizeSubscriptions } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 import webpush from 'web-push';
 
@@ -66,26 +66,18 @@ async function pushToEmps(
        FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
       [corpCode, ...empCodes],
     );
-    const active = await filterActiveSubscriptions(rows, corpCode);
-    await Promise.allSettled(
-      active.map((row) =>
-        sendPushNotification(row.subscription, {
-          title,
-          body,
-          url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
-          tag: `approval-${reqId}`,
-          ...(approvalMeta ? {
-            approvalAction: {
-              reqId,
-              companyCode: approvalMeta.companyCode,
-              corpCode:    approvalMeta.corpCode,
-              empCode:     row.emp_code,
-              empName:     '',
-            },
-          } : {}),
-        }),
-      ),
-    );
+    const { active, silent } = await categorizeSubscriptions(rows, corpCode);
+    const makePayload = (row: { emp_code: string }, isSilent: boolean) => ({
+      title, body,
+      url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
+      tag: `approval-${reqId}`,
+      ...(isSilent ? { silent: true as const } : {}),
+      ...(approvalMeta ? { approvalAction: { reqId, companyCode: approvalMeta.companyCode, corpCode: approvalMeta.corpCode, empCode: row.emp_code, empName: '' } } : {}),
+    });
+    await Promise.allSettled([
+      ...active.map((row) => sendPushNotification(row.subscription, makePayload(row, false))),
+      ...silent.map((row) => sendPushNotification(row.subscription, makePayload(row, true))),
+    ]);
   } catch (err) {
     console.error('[action] 푸쉬 실패:', err);
   }
@@ -250,16 +242,17 @@ export async function POST(request: NextRequest) {
           );
           nextSubs = empSubs;
         }
-        const activeNext = await filterActiveSubscriptions(nextSubs, corpCode);
-        await Promise.allSettled(activeNext.map((row) =>
-          sendPushNotification(row.subscription, {
-            title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,
-            body: `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`,
-            url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
-            tag: `approval-${reqId}`,
-            approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' },
-          }),
-        ));
+        const { active: nextActive, silent: nextSilent } = await categorizeSubscriptions(nextSubs, corpCode);
+        const nextBasePayload = {
+          title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,
+          body: `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`,
+          url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
+          tag: `approval-${reqId}`,
+        };
+        await Promise.allSettled([
+          ...nextActive.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
+          ...nextSilent.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, silent: true, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
+        ]);
       }
     } catch { /* 무시 */ }
   }

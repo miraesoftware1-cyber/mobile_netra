@@ -3,7 +3,7 @@ import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { filterActiveSubscriptions } from '@/lib/push/quiet-hours';
+import { categorizeSubscriptions } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 
 const schema = z.object({
@@ -144,16 +144,11 @@ async function postCancelCleanup(
     subs = empSubs;
   }
 
-  const activeSubs = await filterActiveSubscriptions(subs, corpCode);
-  console.log('[cancel] 취소 푸시 대상:', activeSubs.length, '명');
-  await Promise.allSettled(
-    activeSubs.map((row) =>
-      sendPushNotification(row.subscription, {
-        title: '연차 신청 취소',
-        body:  `${reqEmpName || '신청자'}님이 연차 신청을 취소하였습니다.`,
-        url:   '/APVMNG/APVMNG_01',
-        tag:   `cancel-${reqId}`,
-      }),
-    ),
-  );
+  const { active: activeSubs, silent: silentSubs } = await categorizeSubscriptions(subs, corpCode);
+  console.log('[cancel] 취소 푸시 대상 (일반:', activeSubs.length, '/ 무음:', silentSubs.length, ')');
+  const basePayload = { title: '연차 신청 취소', body: `${reqEmpName || '신청자'}님이 연차 신청을 취소하였습니다.`, url: '/APVMNG/APVMNG_01', tag: `cancel-${reqId}` };
+  await Promise.allSettled([
+    ...activeSubs.map((row) => sendPushNotification(row.subscription, basePayload)),
+    ...silentSubs.map((row) => sendPushNotification(row.subscription, { ...basePayload, silent: true })),
+  ]);
 }

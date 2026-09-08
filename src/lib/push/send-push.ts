@@ -10,10 +10,11 @@ export interface PushApprovalAction {
 }
 
 export interface PushPayload {
-  title:          string;
-  body:           string;
-  url?:           string;
-  tag?:           string;
+  title:           string;
+  body:            string;
+  url?:            string;
+  tag?:            string;
+  silent?:         boolean;             // true이면 소리/진동 없이 표시 (무음 알림)
   approvalAction?: PushApprovalAction;  // 있으면 알림에 승인/반려 버튼 추가
 }
 
