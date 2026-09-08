@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
@@ -13,15 +13,6 @@ const schema = z.object({
   startDate:   z.string().regex(/^\d{8}$/).optional(),
 });
 
-async function ensureCancelledTable() {
-  await query(`
-    CREATE TABLE IF NOT EXISTS netra_cancelled_reqs (
-      req_id INTEGER PRIMARY KEY,
-      cancelled_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => null);
-}
-
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
@@ -31,7 +22,18 @@ export async function POST(request: NextRequest) {
 
   const { companyCode, emp_code, year, year_seq, startDate } = parsed.data;
 
-  const resolved = await resolveCompanyErpBaseUrl(companyCode);
+  // ERP baseUrl 조회와 PG 요청 조회 병렬 실행
+  const [resolved, pgResult] = await Promise.all([
+    resolveCompanyErpBaseUrl(companyCode),
+    query<{ req_id: number; corp_code: string; req_emp_name: string }>(
+      `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
+       FROM netra_apvmng_requests
+       WHERE emp_code=$1 AND (year_seq=$2 ${startDate ? 'OR start_date=$3' : ''})
+       ORDER BY req_id DESC LIMIT 1`,
+      startDate ? [emp_code, year_seq, startDate] : [emp_code, year_seq],
+    ).catch(() => ({ rows: [] as { req_id: number; corp_code: string; req_emp_name: string }[] })),
+  ]);
+
   if (resolved.status === 'missing_gateway_env') return NextResponse.json({ error: '서버 설정 오류입니다.' }, { status: 500 });
   if (resolved.status === 'fetch_failed')        return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   if (resolved.status === 'invalid_company' || resolved.status === 'json_error')
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   const { baseUrl } = resolved;
 
-  // 1. ERP 연차 취소
+  // ERP 연차 취소
   const params = new URLSearchParams({
     proc:   'usp_mobile_cancel_holiday',
     param1: emp_code,
@@ -55,126 +57,100 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: data.MSG || '취소 처리에 실패했습니다.' }, { status: 400 });
   }
 
-  // 2. 연동된 승인 요청 취소
-  try {
-    console.log('[cancel] PG 조회 시도:', { emp_code, year, year_seq, startDate });
-    // year_seq 조회 먼저, 실패 시 startDate로 대체 조회
-    let rows: { req_id: number; corp_code: string; req_emp_name: string }[] = [];
-    const bySeq = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
-      `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
-       FROM netra_apvmng_requests WHERE emp_code=$1 AND year=$2 AND year_seq=$3 LIMIT 1`,
-      [emp_code, year, year_seq],
-    );
-    rows = bySeq.rows;
-    if (rows.length === 0 && startDate) {
-      console.log('[cancel] year_seq 조회 실패, startDate로 재시도:', startDate);
-      const byDate = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
-        `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
-         FROM netra_apvmng_requests WHERE emp_code=$1 AND start_date=$2
-         ORDER BY req_id DESC LIMIT 1`,
-        [emp_code, startDate],
-      );
-      rows = byDate.rows;
-    }
-    // year_seq 조회 성공해도 더 최신 req_id가 있으면 그걸 사용 (startDate 기준 최신)
-    if (rows.length > 0 && startDate) {
-      const byDateLatest = await query<{ req_id: number; corp_code: string; req_emp_name: string }>(
-        `SELECT req_id, COALESCE(corp_code, '') AS corp_code, COALESCE(req_emp_name, '') AS req_emp_name
-         FROM netra_apvmng_requests WHERE emp_code=$1 AND start_date=$2
-         ORDER BY req_id DESC LIMIT 1`,
-        [emp_code, startDate],
-      );
-      if (byDateLatest.rows.length > 0 && byDateLatest.rows[0].req_id > rows[0].req_id) {
-        console.log('[cancel] 더 최신 req_id 발견:', byDateLatest.rows[0].req_id, '(기존:', rows[0].req_id, ')');
-        rows = byDateLatest.rows;
-      }
-    }
-    console.log('[cancel] PG 조회 결과:', rows.length, '건', rows[0] ?? '없음');
-
-    if (rows.length > 0) {
-      const { req_id: reqId, corp_code: corpCode, req_emp_name: reqEmpName } = rows[0];
-
-      // PG에 취소된 req_id 기록 (대기중 목록 필터링용)
-      await ensureCancelledTable();
-      const insertResult = await query(
-        `INSERT INTO netra_cancelled_reqs (req_id) VALUES ($1) ON CONFLICT DO NOTHING`,
-        [reqId],
-      ).catch((e) => { console.error('[cancel] netra_cancelled_reqs 삽입 오류:', e); return null; });
-      console.log('[cancel] netra_cancelled_reqs 삽입 완료, req_id:', reqId, 'rowCount:', insertResult?.rowCount);
-
-      // 현재 단계 승인자에게 취소 푸시 발송 (set_step 이전에 조회해야 함)
-      if (corpCode) {
-        try {
-          // 현재 단계 조회
-          const detailParams = new URLSearchParams({
-            proc:   'usp_mobile_apvmng_request_detail',
-            param1: String(reqId),
-          });
-          const detailRes  = await fetch(`${baseUrl}/R2JsonProc.asp?${detailParams}`).catch(() => null);
-          const detailData = await detailRes?.json().catch(() => null);
-          const currentStep = Number(detailData?.items?.[0]?.CURRENT_STEP ?? 1);
-
-          // 현재 단계 승인자 조회
-          const apvParams = new URLSearchParams({
-            proc:   'usp_mobile_apvmng_step_approvers',
-            param1: String(reqId),
-            param2: String(currentStep),
-          });
-          const apvRes  = await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`).catch(() => null);
-          const apvData = await apvRes?.json().catch(() => null);
-          const approverCodes: string[] = (apvData?.items ?? [])
-            .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
-            .filter(Boolean);
-
-          console.log('[cancel] currentStep:', currentStep, 'approverCodes:', approverCodes);
-
-          if (approverCodes.length > 0) {
-            const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
-            const { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
-              `SELECT subscription FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
-              [corpCode, ...approverCodes],
-            );
-            console.log('[cancel] 취소 푸시 대상:', subs.length, '명');
-            const pushResults = await Promise.allSettled(
-              subs.map((row) =>
-                sendPushNotification(row.subscription, {
-                  title: '연차 신청 취소',
-                  body:  `${reqEmpName || emp_code}님이 연차 신청을 취소하였습니다.`,
-                  url:   '/APVMNG/APVMNG_01',
-                  tag:   `cancel-${reqId}`,
-                }),
-              ),
-            );
-            pushResults.forEach((r, i) => {
-              if (r.status === 'rejected') console.error('[cancel] 푸시 실패:', r.reason);
-              else console.log('[cancel] 푸시 성공 idx:', i);
-            });
-          } else {
-            console.log('[cancel] 승인자 없음 - 취소 푸시 미발송');
-          }
-        } catch (err) {
-          console.error('[cancel] 취소 푸시 실패:', err);
-        }
-      }
-
-      // ERP 승인 요청 상태를 REJECTED로 변경 (CANCELLED는 미지원)
-      const setStepParams = new URLSearchParams({
-        proc:   'usp_mobile_apvmng_set_step',
-        param1: String(reqId),
-        param2: 'REJECTED',
-        param3: '1',
-      });
-      const setStepRes = await fetch(`${baseUrl}/R2JsonProc.asp?${setStepParams}`).catch(() => null);
-      const setStepData = await setStepRes?.json().catch(() => null);
-      console.log('[cancel] set_step 결과:', setStepData?.Flag, setStepData?.MSG);
-
-      // PG 액션·요청 매핑 정리
-      await query(`DELETE FROM netra_apvmng_actions  WHERE req_id=$1`, [reqId]).catch(() => null);
-      await query(`DELETE FROM netra_apvmng_requests WHERE req_id=$1`, [reqId]).catch(() => null);
-    }
-  } catch (err) {
-    console.error('[cancel] 승인 요청 취소 실패:', err);
-  }
+  // 응답 먼저 반환, 나머지 처리(ERP 상태 변경·푸시)는 after()에서
+  const pgRows = pgResult.rows;
+  after(() => postCancelCleanup(baseUrl, companyCode, pgRows).catch((e) => console.error('[cancel] after 처리 실패:', e)));
 
   return NextResponse.json({ success: true, message: data.MSG });
+}
+
+async function postCancelCleanup(
+  baseUrl: string,
+  companyCode: string,
+  rows: { req_id: number; corp_code: string; req_emp_name: string }[],
+) {
+  if (rows.length === 0) {
+    console.log('[cancel] PG 요청 레코드 없음 - 정리 스킵');
+    return;
+  }
+
+  const { req_id: reqId, corp_code: corpCode, req_emp_name: reqEmpName } = rows[0];
+  console.log('[cancel] 정리 시작 req_id:', reqId, 'corp_code:', corpCode);
+
+  // PG cancelled_reqs 기록 + ERP detail/approvers 조회 병렬 실행
+  const [, detailData] = await Promise.all([
+    query(`CREATE TABLE IF NOT EXISTS netra_cancelled_reqs (
+      req_id INTEGER PRIMARY KEY, cancelled_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch(() => null).then(() =>
+      query(
+        `INSERT INTO netra_cancelled_reqs (req_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+        [reqId],
+      ).catch((e) => console.error('[cancel] netra_cancelled_reqs 삽입 오류:', e))
+    ),
+    fetch(`${baseUrl}/R2JsonProc.asp?${new URLSearchParams({
+      proc: 'usp_mobile_apvmng_request_detail', param1: String(reqId),
+    })}`).catch(() => null).then((r) => r?.json().catch(() => null)),
+  ]);
+
+  const currentStep = Number(detailData?.items?.[0]?.CURRENT_STEP ?? 1);
+
+  // 현재 단계 승인자 조회 + set_step 병렬
+  const [apvData, setStepData] = await Promise.all([
+    fetch(`${baseUrl}/R2JsonProc.asp?${new URLSearchParams({
+      proc: 'usp_mobile_apvmng_step_approvers', param1: String(reqId), param2: String(currentStep),
+    })}`).catch(() => null).then((r) => r?.json().catch(() => null)),
+    fetch(`${baseUrl}/R2JsonProc.asp?${new URLSearchParams({
+      proc: 'usp_mobile_apvmng_set_step', param1: String(reqId), param2: 'REJECTED', param3: '1',
+    })}`).catch(() => null).then((r) => r?.json().catch(() => null)),
+  ]);
+
+  console.log('[cancel] set_step:', setStepData?.Flag, setStepData?.MSG);
+
+  // PG 정리
+  await Promise.all([
+    query(`DELETE FROM netra_apvmng_actions  WHERE req_id=$1`, [reqId]).catch(() => null),
+    query(`DELETE FROM netra_apvmng_requests WHERE req_id=$1`, [reqId]).catch(() => null),
+  ]);
+
+  // 승인자 푸시 발송
+  if (!corpCode) return;
+
+  const approverCodes: string[] = (apvData?.items ?? [])
+    .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
+    .filter(Boolean);
+  console.log('[cancel] currentStep:', currentStep, 'approverCodes:', approverCodes);
+
+  if (approverCodes.length === 0) {
+    console.log('[cancel] 승인자 없음 - 취소 푸시 미발송');
+    return;
+  }
+
+  const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
+
+  // user_id로 먼저 조회, 없으면 emp_code 폴백 (user_id ≠ emp_code 거래처 대응)
+  let { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
+    `SELECT subscription FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
+    [corpCode, ...approverCodes],
+  ).catch(() => ({ rows: [] as { subscription: webpush.PushSubscription }[] }));
+
+  if (subs.length === 0) {
+    const { rows: empSubs } = await query<{ subscription: webpush.PushSubscription }>(
+      `SELECT subscription FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
+      [corpCode, ...approverCodes],
+    ).catch(() => ({ rows: [] as { subscription: webpush.PushSubscription }[] }));
+    console.log('[cancel] emp_code 폴백 조회:', empSubs.length, '건');
+    subs = empSubs;
+  }
+
+  console.log('[cancel] 취소 푸시 대상:', subs.length, '명');
+  await Promise.allSettled(
+    subs.map((row) =>
+      sendPushNotification(row.subscription, {
+        title: '연차 신청 취소',
+        body:  `${reqEmpName || '신청자'}님이 연차 신청을 취소하였습니다.`,
+        url:   '/APVMNG/APVMNG_01',
+        tag:   `cancel-${reqId}`,
+      }),
+    ),
+  );
 }
