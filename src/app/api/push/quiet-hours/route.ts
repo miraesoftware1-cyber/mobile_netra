@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
 
 const putSchema = z.object({
   empCode:  z.string().min(1),
+  userId:   z.string().default(''),
   corpCode: z.string().min(1),
   enabled:  z.boolean(),
   start:    z.string().regex(/^\d{2}:\d{2}$/),
@@ -52,14 +53,15 @@ export async function PUT(request: NextRequest) {
   const parsed = putSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: '잘못된 요청' }, { status: 400 });
 
-  const { empCode, corpCode, enabled, start, end } = parsed.data;
+  const { empCode, userId, corpCode, enabled, start, end } = parsed.data;
 
   await ensureQuietHoursCols();
+  // emp_code 또는 user_id 둘 다 체크 (user_id ≠ emp_code 거래처 대응)
   await query(
     `UPDATE netra_push_subs
-     SET quiet_enabled=$3, quiet_start=$4, quiet_end=$5
-     WHERE emp_code=$1 AND corp_code=$2`,
-    [empCode, corpCode, enabled, start, end],
+     SET quiet_enabled=$4, quiet_start=$5, quiet_end=$6
+     WHERE corp_code=$3 AND (emp_code=$1 OR user_id=$1 OR emp_code=$2 OR user_id=$2)`,
+    [empCode, userId || empCode, corpCode, enabled, start, end],
   );
 
   return NextResponse.json({ success: true });

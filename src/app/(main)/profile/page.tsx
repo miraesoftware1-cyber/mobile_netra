@@ -117,7 +117,7 @@ export default function ProfilePage() {
     await fetch('/api/push/quiet-hours', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ empCode: user.emp_code, corpCode: user.corp_code, enabled, start, end }),
+      body: JSON.stringify({ empCode: user.emp_code, userId: user.user_id, corpCode: user.corp_code, enabled, start, end }),
     }).catch(() => {});
   }, [user?.emp_code, user?.corp_code]);
 
