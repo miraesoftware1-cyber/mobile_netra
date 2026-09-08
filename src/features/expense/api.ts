@@ -112,16 +112,54 @@ export async function fetchExpenseProjects(
   return { success: true, data: data.items ?? [] };
 }
 
+const MAX_IMAGE_LONG_SIDE = 1280; // px
+const IMAGE_QUALITY       = 0.82;
+const RESIZE_THRESHOLD    = 1 * 1024 * 1024; // 1 MB 초과 시 리사이즈
+
+function resizeImageFile(file: File): Promise<File> {
+  if (!file.type.startsWith('image/') || file.size <= RESIZE_THRESHOLD) {
+    return Promise.resolve(file);
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > MAX_IMAGE_LONG_SIDE || height > MAX_IMAGE_LONG_SIDE) {
+        const ratio = Math.min(MAX_IMAGE_LONG_SIDE / width, MAX_IMAGE_LONG_SIDE / height);
+        width  = Math.round(width  * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) { resolve(file); return; }
+        resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+          type: 'image/jpeg',
+          lastModified: file.lastModified,
+        }));
+      }, 'image/jpeg', IMAGE_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 export async function uploadExpenseReceipts(
   companyCode: string,
   resolutionDate: string,
   files: File[],
 ): Promise<UploadExpenseReceiptsResult> {
+  const resized = await Promise.all(files.map(resizeImageFile));
+
   const formData = new FormData();
   formData.append("companyCode", companyCode);
   formData.append("resolutionDate", resolutionDate);
 
-  files.forEach((file) => {
+  resized.forEach((file) => {
     formData.append("file1", file);
   });
 
