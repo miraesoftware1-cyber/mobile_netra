@@ -3,6 +3,7 @@ import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
+import { isInQuietHours } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 
 const schema = z.object({
@@ -126,25 +127,27 @@ async function postCancelCleanup(
   }
 
   const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
+  type SubRow = { subscription: webpush.PushSubscription; quiet_enabled: boolean | null; quiet_start: string | null; quiet_end: string | null };
 
   // user_id로 먼저 조회, 없으면 emp_code 폴백 (user_id ≠ emp_code 거래처 대응)
-  let { rows: subs } = await query<{ subscription: webpush.PushSubscription }>(
-    `SELECT subscription FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
+  let { rows: subs } = await query<SubRow>(
+    `SELECT subscription, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
     [corpCode, ...approverCodes],
-  ).catch(() => ({ rows: [] as { subscription: webpush.PushSubscription }[] }));
+  ).catch(() => ({ rows: [] as SubRow[] }));
 
   if (subs.length === 0) {
-    const { rows: empSubs } = await query<{ subscription: webpush.PushSubscription }>(
-      `SELECT subscription FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
+    const { rows: empSubs } = await query<SubRow>(
+      `SELECT subscription, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
       [corpCode, ...approverCodes],
-    ).catch(() => ({ rows: [] as { subscription: webpush.PushSubscription }[] }));
+    ).catch(() => ({ rows: [] as SubRow[] }));
     console.log('[cancel] emp_code 폴백 조회:', empSubs.length, '건');
     subs = empSubs;
   }
 
-  console.log('[cancel] 취소 푸시 대상:', subs.length, '명');
+  const activeSubs = subs.filter((r) => !isInQuietHours(r.quiet_start, r.quiet_end, r.quiet_enabled));
+  console.log('[cancel] 취소 푸시 대상:', activeSubs.length, '명');
   await Promise.allSettled(
-    subs.map((row) =>
+    activeSubs.map((row) =>
       sendPushNotification(row.subscription, {
         title: '연차 신청 취소',
         body:  `${reqEmpName || '신청자'}님이 연차 신청을 취소하였습니다.`,

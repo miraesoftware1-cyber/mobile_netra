@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { User, Building2, LogOut, Type, IdCard, Atom } from "lucide-react";
+import { User, Building2, LogOut, Type, IdCard, Atom, BellOff } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +18,31 @@ export default function ProfilePage() {
   const logout = useAuthStore((s) => s.logout);
   const fontSize = useFontSizeStore((s) => s.fontSize);
   const setFontSize = useFontSizeStore((s) => s.setFontSize);
+
+  const [quietEnabled, setQuietEnabled] = useState(false);
+  const [quietStart, setQuietStart]     = useState('22:00');
+  const [quietEnd, setQuietEnd]         = useState('07:00');
+
+  useEffect(() => {
+    if (!user?.emp_code || !user?.corp_code) return;
+    fetch(`/api/push/quiet-hours?empCode=${user.emp_code}&corpCode=${user.corp_code}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        setQuietEnabled(data.enabled ?? false);
+        setQuietStart(data.start ?? '22:00');
+        setQuietEnd(data.end ?? '07:00');
+      }).catch(() => {});
+  }, [user?.emp_code, user?.corp_code]);
+
+  const saveQuietHours = useCallback(async (enabled: boolean, start: string, end: string) => {
+    if (!user?.emp_code || !user?.corp_code) return;
+    await fetch('/api/push/quiet-hours', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empCode: user.emp_code, corpCode: user.corp_code, enabled, start, end }),
+    }).catch(() => {});
+  }, [user?.emp_code, user?.corp_code]);
 
   const handleLogout = () => {
     logout();
@@ -85,6 +111,51 @@ export default function ProfilePage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 무음 알림 시간대 */}
+          <div className="border-b border-gray-50">
+            <div className="flex items-center gap-3 px-4 py-4">
+              <BellOff className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <span className="flex-1 text-sm text-gray-700">무음 알림 시간대</span>
+              <button
+                onClick={() => {
+                  const next = !quietEnabled;
+                  setQuietEnabled(next);
+                  saveQuietHours(next, quietStart, quietEnd);
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  quietEnabled ? 'bg-primary' : 'bg-gray-200'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  quietEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+            {quietEnabled && (
+              <div className="flex items-center gap-2 px-4 pb-4">
+                <input
+                  type="time"
+                  value={quietStart}
+                  onChange={(e) => {
+                    setQuietStart(e.target.value);
+                    saveQuietHours(quietEnabled, e.target.value, quietEnd);
+                  }}
+                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-center"
+                />
+                <span className="text-xs text-gray-400 flex-shrink-0">~</span>
+                <input
+                  type="time"
+                  value={quietEnd}
+                  onChange={(e) => {
+                    setQuietEnd(e.target.value);
+                    saveQuietHours(quietEnabled, quietStart, e.target.value);
+                  }}
+                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-center"
+                />
+              </div>
+            )}
           </div>
 
           {/* 앱 버전 */}

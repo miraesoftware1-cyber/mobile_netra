@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
+import { isInQuietHours } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 import webpush from 'web-push';
 
@@ -56,12 +57,20 @@ async function pushToEmps(
   if (empCodes.length === 0) return;
   try {
     const placeholders = empCodes.map((_, i) => `$${i + 2}`).join(',');
-    const { rows } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-      `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
+    const { rows } = await query<{
+      subscription:  webpush.PushSubscription;
+      emp_code:      string;
+      quiet_enabled: boolean | null;
+      quiet_start:   string | null;
+      quiet_end:     string | null;
+    }>(
+      `SELECT subscription, emp_code, quiet_enabled, quiet_start, quiet_end
+       FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${placeholders})`,
       [corpCode, ...empCodes],
     );
+    const active = rows.filter((r) => !isInQuietHours(r.quiet_start, r.quiet_end, r.quiet_enabled));
     await Promise.allSettled(
-      rows.map((row) =>
+      active.map((row) =>
         sendPushNotification(row.subscription, {
           title,
           body,
@@ -230,19 +239,21 @@ export async function POST(request: NextRequest) {
         .filter(Boolean);
       if (nextUserIds.length > 0) {
         const ph = nextUserIds.map((_, i) => `$${i + 2}`).join(',');
+        type SubRow = { subscription: webpush.PushSubscription; emp_code: string; quiet_enabled: boolean | null; quiet_start: string | null; quiet_end: string | null };
         // user_id로 먼저 조회, 없으면 emp_code로 폴백 (user_id ≠ emp_code인 거래처 대응)
-        let { rows: nextSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-          `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
+        let { rows: nextSubs } = await query<SubRow>(
+          `SELECT subscription, emp_code, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
           [corpCode, ...nextUserIds],
         );
         if (nextSubs.length === 0) {
-          const { rows: empSubs } = await query<{ subscription: webpush.PushSubscription; emp_code: string }>(
-            `SELECT subscription, emp_code FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
+          const { rows: empSubs } = await query<SubRow>(
+            `SELECT subscription, emp_code, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
             [corpCode, ...nextUserIds],
           );
           nextSubs = empSubs;
         }
-        await Promise.allSettled(nextSubs.map((row) =>
+        const activeNext = nextSubs.filter((r) => !isInQuietHours(r.quiet_start, r.quiet_end, r.quiet_enabled));
+        await Promise.allSettled(activeNext.map((row) =>
           sendPushNotification(row.subscription, {
             title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,
             body: `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`,
