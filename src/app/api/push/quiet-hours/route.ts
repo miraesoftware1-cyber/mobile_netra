@@ -12,9 +12,10 @@ async function ensureQuietHoursCols() {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const empCode  = searchParams.get('empCode');
+  const empCode  = searchParams.get('empCode') ?? '';
+  const userId   = searchParams.get('userId')  ?? '';
   const corpCode = searchParams.get('corpCode');
-  if (!empCode || !corpCode) {
+  if (!corpCode || (!empCode && !userId)) {
     return NextResponse.json({ error: '필수 파라미터 누락' }, { status: 400 });
   }
 
@@ -27,9 +28,9 @@ export async function GET(request: NextRequest) {
   }>(
     `SELECT quiet_enabled, quiet_start, quiet_end
      FROM netra_push_subs
-     WHERE emp_code=$1 AND corp_code=$2
+     WHERE corp_code=$3 AND (emp_code=$1 OR user_id=$1 OR emp_code=$2 OR user_id=$2)
      ORDER BY updated_at DESC LIMIT 1`,
-    [empCode, corpCode],
+    [empCode, userId || empCode, corpCode],
   ).catch(() => ({ rows: [] }));
 
   return NextResponse.json({

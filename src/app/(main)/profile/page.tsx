@@ -102,7 +102,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user?.emp_code || !user?.corp_code) return;
-    fetch(`/api/push/quiet-hours?empCode=${user.emp_code}&corpCode=${user.corp_code}`)
+    fetch(`/api/push/quiet-hours?empCode=${user.emp_code}&userId=${user.user_id}&corpCode=${user.corp_code}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (!data) return;
