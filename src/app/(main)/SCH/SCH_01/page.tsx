@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, parseISO, getDay } from "date-fns";
+import { ko } from "date-fns/locale";
 import {
   ChevronLeft, CalendarPlus,
-  Search, Plus, Pencil, Trash2, X, AlertCircle,
+  Search, Plus, Pencil, Trash2, X, AlertCircle, CalendarDays,
 } from "lucide-react";
 import { DataGrid } from "@/components/data-grid";
 import type { GridColumn, GridRow } from "@/components/data-grid";
@@ -13,6 +14,10 @@ import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { useMenuTitle } from "@/features/menu/use-menu-store";
 import { usePagePermission } from "@/features/menu-permission/hooks/use-page-permission";
 import type { CalScdRow } from "@/app/api/schedule-crud/route";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /* ──────────── 날짜 유틸 ──────────── */
 function toYMD(d: Date) { return format(d, "yyyyMMdd"); }
@@ -27,6 +32,90 @@ function formatYMD(s: string) {
 }
 function toGridRow(r: CalScdRow): GridRow<CalScdRow> {
   return { ...r, __key: r.scd_key, __status: "unchanged" };
+}
+
+/* ──────────── 날짜 피커 (공휴일 색상 포함) ──────────── */
+function SchDatePickerField({
+  value,
+  onChange,
+  placeholder = "날짜 선택",
+  minYmd,
+  holidayDates,
+}: {
+  value: string;         // yyyyMMdd
+  onChange: (v: string) => void;
+  placeholder?: string;
+  minYmd?: string;       // yyyyMMdd - 이 날짜 미만 비활성
+  holidayDates: Set<string>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selectedDate = value?.length === 8
+    ? parseISO(`${value.slice(0,4)}-${value.slice(4,6)}-${value.slice(6,8)}`)
+    : undefined;
+
+  const ColoredDayButton = useMemo(() => {
+    const dates = holidayDates;
+    return function DayButtonColored(props: React.ComponentProps<typeof CalendarDayButton>) {
+      const { day, modifiers, className } = props;
+      const dow = day.date.getDay();
+      const dateStr = format(day.date, "yyyy-MM-dd");
+      const isRed = dow === 0 || dates.has(dateStr);
+      const isBlue = dow === 6 && !isRed;
+      return (
+        <CalendarDayButton
+          {...props}
+          className={cn(
+            className,
+            !modifiers.selected && !modifiers.disabled && isBlue && "text-blue-500 hover:text-blue-600",
+            !modifiers.selected && !modifiers.disabled && isRed  && "text-red-500  hover:text-red-600",
+          )}
+        />
+      );
+    };
+  }, [holidayDates]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-11 w-full justify-start border-gray-200 bg-gray-50 text-sm font-normal",
+            !value && "text-gray-400",
+          )}
+        >
+          <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-gray-400" />
+          {value?.length === 8
+            ? `${value.slice(0,4)}.${value.slice(4,6)}.${value.slice(6,8)}`
+            : placeholder}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="z-[300] w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            onChange(date ? format(date, "yyyyMMdd") : "");
+            setOpen(false);
+          }}
+          disabled={minYmd ? (date) => {
+            const min = parseISO(`${minYmd.slice(0,4)}-${minYmd.slice(4,6)}-${minYmd.slice(6,8)}`);
+            min.setHours(0,0,0,0);
+            date.setHours(0,0,0,0);
+            return date < min;
+          } : undefined}
+          locale={ko}
+          formatters={{
+            formatCaption: (date) => format(date, "yyyy년 M월", { locale: ko }),
+            formatWeekdayName: (date) => format(date, "eeeee", { locale: ko }),
+          }}
+          components={{ DayButton: ColoredDayButton }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /* ──────────── 컬럼 정의 (읽기 전용) ──────────── */
@@ -76,6 +165,25 @@ export default function ScheduleRegisterPage() {
   const todayYMD = toYMD(now);
   const [startDate, setStartDate] = useState(() => toYMD(startOfMonth(now)));
   const [endDate, setEndDate] = useState(() => toYMD(endOfMonth(now)));
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user?.companyCode || !user?.corp_code) return;
+    const year = String(now.getFullYear());
+    fetch(`/api/leave/company-holidays?companyCode=${user.companyCode}&corpCode=${user.corp_code}&year=${year}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { items?: { hdate: string }[] } | null) => {
+        if (!data?.items) return;
+        setHolidayDates(new Set(
+          data.items.map(({ hdate }) => {
+            const n = hdate.replace(/-/g, "");
+            return `${n.slice(0,4)}-${n.slice(4,6)}-${n.slice(6,8)}`;
+          }),
+        ));
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.companyCode, user?.corp_code]);
 
   const [rows, setRows] = useState<CalScdRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -273,29 +381,30 @@ export default function ScheduleRegisterPage() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
             <p className="text-xs font-medium text-gray-400 mb-2">조회기간</p>
             <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={ymdToInput(startDate)}
-                max={ymdToInput(endDate)}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/-/g, "");
-                  setStartDate(v);
-                  if (v && endDate && v > endDate) setEndDate(v);
-                }}
-                className="flex-1 text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2"
-              />
+              <div className="flex-1">
+                <SchDatePickerField
+                  value={startDate}
+                  onChange={(v) => {
+                    setStartDate(v);
+                    if (v && endDate && v > endDate) setEndDate(v);
+                  }}
+                  placeholder="시작일"
+                  holidayDates={holidayDates}
+                />
+              </div>
               <span className="text-gray-400 text-sm shrink-0">~</span>
-              <input
-                type="date"
-                value={ymdToInput(endDate)}
-                min={ymdToInput(startDate)}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/-/g, "");
-                  if (v && startDate && v < startDate) return;
-                  setEndDate(v);
-                }}
-                className="flex-1 text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2"
-              />
+              <div className="flex-1">
+                <SchDatePickerField
+                  value={endDate}
+                  onChange={(v) => {
+                    if (v && startDate && v < startDate) return;
+                    setEndDate(v);
+                  }}
+                  placeholder="종료일"
+                  minYmd={startDate || undefined}
+                  holidayDates={holidayDates}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -410,36 +519,34 @@ export default function ScheduleRegisterPage() {
                 </div>
 
                 {/* 시작일 / 종료일 */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-semibold text-gray-700">
                       시작일 <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={ymdToInput(form.beg_date)}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/-/g, "");
+                    <SchDatePickerField
+                      value={form.beg_date}
+                      onChange={(v) => {
                         setField("beg_date", v);
                         if (v && form.end_date && v > form.end_date) setField("end_date", v);
                       }}
-                      className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                      placeholder="시작일 선택"
+                      holidayDates={holidayDates}
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-semibold text-gray-700">
                       종료일 <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={ymdToInput(form.end_date)}
-                      min={ymdToInput(form.beg_date) || undefined}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/-/g, "");
+                    <SchDatePickerField
+                      value={form.end_date}
+                      onChange={(v) => {
                         if (v && form.beg_date && v < form.beg_date) return;
                         setField("end_date", v);
                       }}
-                      className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                      placeholder="종료일 선택"
+                      minYmd={form.beg_date || undefined}
+                      holidayDates={holidayDates}
                     />
                   </div>
                 </div>
