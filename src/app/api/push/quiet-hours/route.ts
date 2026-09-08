@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { query } from '@/lib/db/postgres';
 
-async function ensureQuietHoursCols() {
-  await Promise.all([
-    query(`ALTER TABLE netra_push_subs ADD COLUMN IF NOT EXISTS quiet_enabled BOOLEAN DEFAULT FALSE`).catch(() => null),
-    query(`ALTER TABLE netra_push_subs ADD COLUMN IF NOT EXISTS quiet_start   VARCHAR(5)`).catch(() => null),
-    query(`ALTER TABLE netra_push_subs ADD COLUMN IF NOT EXISTS quiet_end     VARCHAR(5)`).catch(() => null),
-  ]);
+async function ensurePrefsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS netra_user_prefs (
+      corp_code     VARCHAR(50)  NOT NULL,
+      emp_code      VARCHAR(100) NOT NULL,
+      user_id       VARCHAR(100),
+      quiet_enabled BOOLEAN      NOT NULL DEFAULT FALSE,
+      quiet_start   VARCHAR(5),
+      quiet_end     VARCHAR(5),
+      updated_at    TIMESTAMPTZ  DEFAULT NOW(),
+      PRIMARY KEY   (corp_code, emp_code)
+    )
+  `).catch(() => null);
 }
 
 export async function GET(request: NextRequest) {
@@ -19,7 +26,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '필수 파라미터 누락' }, { status: 400 });
   }
 
-  await ensureQuietHoursCols();
+  await ensurePrefsTable();
 
   const { rows } = await query<{
     quiet_enabled: boolean;
@@ -27,13 +34,11 @@ export async function GET(request: NextRequest) {
     quiet_end:     string | null;
   }>(
     `SELECT quiet_enabled, quiet_start, quiet_end
-     FROM netra_push_subs
-     WHERE corp_code=$3 AND (emp_code=$1 OR user_id=$1 OR emp_code=$2 OR user_id=$2)
-     ORDER BY updated_at DESC LIMIT 1`,
-    [empCode, userId || empCode, corpCode],
-  ).catch((e) => { console.error('[quiet-hours GET] query error:', e); return { rows: [] }; });
-
-  console.log('[quiet-hours GET] empCode:', empCode, 'userId:', userId, 'corpCode:', corpCode, '→ rows:', rows.length, 'enabled:', rows[0]?.quiet_enabled);
+     FROM netra_user_prefs
+     WHERE corp_code=$1 AND (emp_code=$2 OR user_id=$2 OR emp_code=$3 OR user_id=$3)
+     LIMIT 1`,
+    [corpCode, empCode, userId || empCode],
+  ).catch(() => ({ rows: [] }));
 
   return NextResponse.json({
     enabled: rows[0]?.quiet_enabled ?? false,
@@ -58,15 +63,14 @@ export async function PUT(request: NextRequest) {
 
   const { empCode, userId, corpCode, enabled, start, end } = parsed.data;
 
-  await ensureQuietHoursCols();
-  // emp_code 또는 user_id 둘 다 체크 (user_id ≠ emp_code 거래처 대응)
-  const result = await query(
-    `UPDATE netra_push_subs
-     SET quiet_enabled=$4, quiet_start=$5, quiet_end=$6
-     WHERE corp_code=$3 AND (emp_code=$1 OR user_id=$1 OR emp_code=$2 OR user_id=$2)`,
-    [empCode, userId || empCode, corpCode, enabled, start, end],
+  await ensurePrefsTable();
+  await query(
+    `INSERT INTO netra_user_prefs (corp_code, emp_code, user_id, quiet_enabled, quiet_start, quiet_end, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (corp_code, emp_code) DO UPDATE SET
+       user_id = $3, quiet_enabled = $4, quiet_start = $5, quiet_end = $6, updated_at = NOW()`,
+    [corpCode, empCode, userId || null, enabled, start, end],
   );
-  console.log('[quiet-hours PUT] empCode:', empCode, 'userId:', userId, 'corpCode:', corpCode, 'enabled:', enabled, '→ rowCount:', result.rowCount);
 
   return NextResponse.json({ success: true });
 }

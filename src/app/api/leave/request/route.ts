@@ -4,7 +4,7 @@ import { z } from 'zod';
 import webpush from 'web-push';
 import { resolveCompanyErpBaseUrl } from '@/lib/erp/resolve-company-erp-base-url';
 import { sendPushNotification } from '@/lib/push/send-push';
-import { isInQuietHours, ensureQuietHoursCols } from '@/lib/push/quiet-hours';
+import { filterActiveSubscriptions } from '@/lib/push/quiet-hours';
 import { query } from '@/lib/db/postgres';
 
 const requestSchema = z.object({
@@ -220,17 +220,16 @@ async function prepareApproval(args: {
 }
 
 async function sendNotifications(setup: ApprovalSetup) {
-  await ensureQuietHoursCols();
   if (setup.kind === 'fallback') {
     const { corp_code, dpt_code, emp_code, emp_name } = setup;
-    const { rows } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string; quiet_enabled: boolean | null; quiet_start: string | null; quiet_end: string | null }>(
-      `SELECT subscription, manage_dpt_codes, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code = $1`,
+    const { rows } = await query<{ subscription: webpush.PushSubscription; manage_dpt_codes: string; emp_code: string; user_id: string | null }>(
+      `SELECT subscription, manage_dpt_codes, emp_code, user_id FROM netra_push_subs WHERE corp_code = $1`,
       [corp_code],
     );
-    const targets = rows.filter((r) =>
-      r.manage_dpt_codes?.split(',').map((c) => c.trim()).includes(dpt_code) &&
-      !isInQuietHours(r.quiet_start, r.quiet_end, r.quiet_enabled),
+    const dptRows = rows.filter((r) =>
+      r.manage_dpt_codes?.split(',').map((c) => c.trim()).includes(dpt_code),
     );
+    const targets = await filterActiveSubscriptions(dptRows, corp_code);
     await Promise.allSettled(targets.map((r) =>
       sendPushNotification(r.subscription, {
         title: '연차 신청 알림',
@@ -284,12 +283,12 @@ async function sendNotifications(setup: ApprovalSetup) {
 
   console.log('[push] corp_code:', corp_code, 'groupIds:', groupIds, 'deptCodes:', deptCodes);
 
-  type SubRow = { subscription: webpush.PushSubscription; emp_code: string; quiet_enabled: boolean | null; quiet_start: string | null; quiet_end: string | null };
+  type SubRow = { subscription: webpush.PushSubscription; emp_code: string; user_id: string | null };
   let subs: SubRow[] = [];
   if (groupIds.length > 0) {
     const ph = groupIds.map((_, i) => `$${i+2}`).join(',');
     const { rows } = await query<SubRow>(
-      `SELECT subscription, emp_code, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code=$1 AND user_id IN (${ph})`,
+      `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code=$1 AND user_id IN (${ph})`,
       [corp_code, ...groupIds],
     );
     console.log('[push] user_id 조회 결과:', rows.length, '건, emp_codes:', rows.map(r=>r.emp_code));
@@ -298,7 +297,7 @@ async function sendNotifications(setup: ApprovalSetup) {
   if (deptCodes.length > 0) {
     const ph = deptCodes.map((_, i) => `$${i+2}`).join(',');
     const { rows } = await query<SubRow>(
-      `SELECT subscription, emp_code, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
+      `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
       [corp_code, ...deptCodes],
     );
     console.log('[push] emp_code 조회 결과:', rows.length, '건');
@@ -309,14 +308,14 @@ async function sendNotifications(setup: ApprovalSetup) {
   if (subs.length === 0 && groupIds.length > 0) {
     const ph = groupIds.map((_, i) => `$${i+2}`).join(',');
     const { rows: empRows } = await query<SubRow>(
-      `SELECT subscription, emp_code, quiet_enabled, quiet_start, quiet_end FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
+      `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
       [corp_code, ...groupIds],
     );
     console.log('[push] emp_code 폴백 조회:', empRows.length, '건');
     subs = [...subs, ...empRows];
   }
 
-  const activeSubs = subs.filter((r) => !isInQuietHours(r.quiet_start, r.quiet_end, r.quiet_enabled));
+  const activeSubs = await filterActiveSubscriptions(subs, corp_code);
 
   if (activeSubs.length === 0) {
     console.log('[push] 구독자 없음(무음 포함) - 푸시 미발송');
