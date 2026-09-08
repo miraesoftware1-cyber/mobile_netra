@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { User, Building2, LogOut, Type, IdCard, Atom, BellOff } from "lucide-react";
+import { User, Building2, LogOut, Type, IdCard, Atom, BellOff, Minus, Plus } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,83 @@ import {
   FONT_SIZE_OPTIONS,
   type FontSize,
 } from "@/features/settings/hooks/use-font-size-store";
+
+function Stepper({
+  value, unit, min, max,
+  onInc, onDec, onType,
+}: {
+  value: number; unit: string; min: number; max: number;
+  onInc: () => void; onDec: () => void;
+  onType: (raw: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft ?? String(value).padStart(2, '0');
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onDec}
+        className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 active:bg-gray-200 shrink-0"
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onChange={(e) => {
+          const raw = e.target.value.replace(/\D/g, '').slice(0, 2);
+          setDraft(raw);
+          onType(raw);
+        }}
+        onBlur={() => setDraft(null)}
+        className="w-12 text-center text-sm font-bold border border-gray-200 rounded-xl py-1.5 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+      />
+      <span className="text-xs text-gray-400 select-none -ml-0.5">{unit}</span>
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onInc}
+        className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 active:bg-gray-200 shrink-0"
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [hStr, mStr] = value.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const fmt = (n: number) => String(n).padStart(2, '0');
+
+  const setH = (newH: number) => onChange(`${fmt(newH)}:${fmt(m)}`);
+  const setM = (newM: number) => onChange(`${fmt(h)}:${fmt(newM)}`);
+
+  return (
+    <div className="flex items-center gap-5">
+      <Stepper
+        value={h} unit="시" min={0} max={23}
+        onInc={() => setH(h >= 23 ? 0 : h + 1)}
+        onDec={() => setH(h <= 0 ? 23 : h - 1)}
+        onType={(raw) => {
+          const n = parseInt(raw, 10);
+          if (!isNaN(n) && n >= 0 && n <= 23) setH(n);
+        }}
+      />
+      <Stepper
+        value={m} unit="분" min={0} max={59}
+        onInc={() => setM(m >= 50 ? 0 : Math.floor(m / 10) * 10 + 10)}
+        onDec={() => setM(m <= 0 ? 50 : (Math.ceil(m / 10) - 1) * 10)}
+        onType={(raw) => {
+          const n = parseInt(raw, 10);
+          if (!isNaN(n) && n >= 0 && n <= 59) setM(n);
+        }}
+      />
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -134,26 +211,21 @@ export default function ProfilePage() {
               </button>
             </div>
             {quietEnabled && (
-              <div className="flex items-center gap-2 px-4 pb-4">
-                <input
-                  type="time"
-                  value={quietStart}
-                  onChange={(e) => {
-                    setQuietStart(e.target.value);
-                    saveQuietHours(quietEnabled, e.target.value, quietEnd);
-                  }}
-                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-center"
-                />
-                <span className="text-xs text-gray-400 flex-shrink-0">~</span>
-                <input
-                  type="time"
-                  value={quietEnd}
-                  onChange={(e) => {
-                    setQuietEnd(e.target.value);
-                    saveQuietHours(quietEnabled, quietStart, e.target.value);
-                  }}
-                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-center"
-                />
+              <div className="px-4 pb-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-400 w-8">시작</span>
+                  <TimePicker
+                    value={quietStart}
+                    onChange={(v) => { setQuietStart(v); saveQuietHours(quietEnabled, v, quietEnd); }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-400 w-8">종료</span>
+                  <TimePicker
+                    value={quietEnd}
+                    onChange={(v) => { setQuietEnd(v); saveQuietHours(quietEnabled, quietStart, v); }}
+                  />
+                </div>
               </div>
             )}
           </div>
