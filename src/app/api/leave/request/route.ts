@@ -304,6 +304,13 @@ async function sendNotifications(setup: ApprovalSetup) {
 
   // 구독자 없으면 emp_code로 재시도 (user_id ≠ emp_code인 거래처 대응)
   if (subs.length === 0 && groupIds.length > 0) {
+    // 진단: corp_code 내 전체 구독 확인
+    const { rows: allSubs } = await query<{ emp_code: string; user_id: string | null }>(
+      `SELECT emp_code, user_id FROM netra_push_subs WHERE corp_code=$1`,
+      [corp_code],
+    ).catch(() => ({ rows: [] }));
+    console.log('[push] corp_code', corp_code, '전체 구독:', allSubs.map(r => `emp=${r.emp_code}/uid=${r.user_id}`));
+
     const ph = groupIds.map((_, i) => `$${i+2}`).join(',');
     const { rows: empRows } = await query<SubRow>(
       `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code=$1 AND emp_code IN (${ph})`,
