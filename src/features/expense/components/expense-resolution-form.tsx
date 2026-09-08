@@ -719,7 +719,7 @@ export function ExpenseResolutionForm() {
       method="post"
       className="flex min-h-0 flex-1 flex-col"
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5 pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5 pb-5">
         <div className="grid grid-cols-2 gap-3 sm:gap-4 [&>*]:min-w-0">
           <FieldRow label="결의일" error={errors.resolutionDate?.message}>
             <Controller
@@ -1198,7 +1198,7 @@ export function ExpenseResolutionForm() {
         </FieldRow>
       </div>
 
-      <div className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-[430px] -translate-x-1/2 gap-3 border-t border-gray-100 bg-white px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+      <div className="flex flex-shrink-0 gap-3 border-t border-gray-100 bg-white px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
         <Button
           type="button"
           variant="outline"
