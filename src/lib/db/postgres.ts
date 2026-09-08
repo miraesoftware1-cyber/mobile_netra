@@ -13,8 +13,9 @@ function getPool(): Pool {
       database: process.env.NETRA_DB_NAME ?? "PDM",
       user: process.env.NETRA_DB_USER ?? "postgres",
       password: process.env.NETRA_DB_PASSWORD ?? "",
-      max: 10,
-      idleTimeoutMillis: 30000,
+      max: 2,                      // 서버리스: 인스턴스당 최대 연결 수 최소화
+      idleTimeoutMillis: 10000,    // 유휴 연결 빠르게 반환
+      connectionTimeoutMillis: 5000,
     });
   }
   return global._netraPool;
