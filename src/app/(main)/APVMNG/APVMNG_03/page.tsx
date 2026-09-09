@@ -96,9 +96,9 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
               </span>
             )}
             {step.pushEnabled && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-500">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-600">
                 <Bell className="w-2.5 h-2.5" />
-                푸시
+                알림
               </span>
             )}
           </div>
