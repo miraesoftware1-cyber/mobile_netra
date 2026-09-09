@@ -158,32 +158,32 @@ export async function POST(request: NextRequest) {
   const { baseUrl } = resolved;
   const uploadUrl = getUploadEndpoint(baseUrl);
   const validFiles = files.filter((file): file is File => file instanceof File);
-  const uploadedRemoteNames: string[] = [];
 
-  for (const file of validFiles) {
-    const uploadResult = await uploadFileByChunks(
-      uploadUrl,
-      file,
-      resolutionDateText,
-    );
-    if ("status" in uploadResult) {
-      return NextResponse.json(
-        {
-          error: "영수증 업로드에 실패했습니다.",
-          upstream: {
-            step: "upload_file",
-            requestUrl: uploadUrl,
-            status: uploadResult.status,
-            statusText: uploadResult.statusText,
-            body: uploadResult.body,
-            fileName: uploadResult.remoteName,
-          },
+  const uploadResults = await Promise.all(
+    validFiles.map((file) => uploadFileByChunks(uploadUrl, file, resolutionDateText)),
+  );
+
+  const failedResult = uploadResults.find((r) => "status" in r);
+  if (failedResult && "status" in failedResult) {
+    return NextResponse.json(
+      {
+        error: "영수증 업로드에 실패했습니다.",
+        upstream: {
+          step: "upload_file",
+          requestUrl: uploadUrl,
+          status: failedResult.status,
+          statusText: failedResult.statusText,
+          body: failedResult.body,
+          fileName: failedResult.remoteName,
         },
-        { status: 502 },
-      );
-    }
-    uploadedRemoteNames.push(uploadResult.remoteName);
+      },
+      { status: 502 },
+    );
   }
+
+  const uploadedRemoteNames = uploadResults
+    .filter((r): r is { success: true; remoteName: string } => r.success)
+    .map((r) => r.remoteName);
 
   return NextResponse.json({
     success: true,

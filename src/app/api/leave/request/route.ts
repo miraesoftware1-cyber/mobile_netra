@@ -31,6 +31,8 @@ interface InsertHolidayApiResponse {
   items: Array<Record<string, unknown>>;
 }
 
+let _reqsTableEnsured = false;
+
 type StepApprover = { stepNo: number; apvType: string; empCode: string; userId?: string; threshold: number };
 
 type ApprovalSetup =
@@ -198,13 +200,18 @@ async function prepareApproval(args: {
   if (!reqId || String(createData?.Flag) !== '0') return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
 
   // 4. req_id → PG 저장 (취소 시 필요)
-  await query(`CREATE TABLE IF NOT EXISTS netra_apvmng_requests (
-    id SERIAL PRIMARY KEY, req_id INTEGER NOT NULL, corp_code VARCHAR(50),
-    emp_code VARCHAR(50) NOT NULL, req_emp_name VARCHAR(100),
-    menu_id VARCHAR(50), year VARCHAR(4), year_seq INTEGER, start_date VARCHAR(8), created_at TIMESTAMPTZ DEFAULT NOW()
-  )`).catch(() => null);
-  await query(`ALTER TABLE netra_apvmng_requests ADD COLUMN IF NOT EXISTS req_emp_name VARCHAR(100)`).catch(() => null);
-  await query(`ALTER TABLE netra_apvmng_requests ADD COLUMN IF NOT EXISTS start_date VARCHAR(8)`).catch(() => null);
+  if (!_reqsTableEnsured) {
+    await query(`CREATE TABLE IF NOT EXISTS netra_apvmng_requests (
+      id SERIAL PRIMARY KEY, req_id INTEGER NOT NULL, corp_code VARCHAR(50),
+      emp_code VARCHAR(50) NOT NULL, req_emp_name VARCHAR(100),
+      menu_id VARCHAR(50), year VARCHAR(4), year_seq INTEGER, start_date VARCHAR(8), created_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch(() => null);
+    await Promise.all([
+      query(`ALTER TABLE netra_apvmng_requests ADD COLUMN IF NOT EXISTS req_emp_name VARCHAR(100)`).catch(() => null),
+      query(`ALTER TABLE netra_apvmng_requests ADD COLUMN IF NOT EXISTS start_date VARCHAR(8)`).catch(() => null),
+    ]);
+    _reqsTableEnsured = true;
+  }
   await query(
     `INSERT INTO netra_apvmng_requests (req_id, corp_code, emp_code, req_emp_name, menu_id, year, year_seq, start_date)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,

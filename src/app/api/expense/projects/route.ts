@@ -3,6 +3,9 @@ import { z } from "zod";
 
 import { resolveCompanyErpBaseUrl } from "@/lib/erp/resolve-company-erp-base-url";
 
+const _cache = new Map<string, { data: ExpenseProjectApiRow[]; expiresAt: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
 const querySchema = z.object({
   companyCode: z.string().min(1),
 });
@@ -59,6 +62,11 @@ export async function GET(request: NextRequest) {
 
   const { baseUrl } = resolved;
 
+  const cached = _cache.get(companyCode);
+  if (cached && Date.now() < cached.expiresAt) {
+    return NextResponse.json({ items: cached.data });
+  }
+
   const projectsRes = await fetch(
     `${baseUrl}/R2JsonProc.asp?proc=usp_mobile_get_expense_project`,
     { cache: "no-store" },
@@ -81,6 +89,7 @@ export async function GET(request: NextRequest) {
   }
 
   const items = data.items ?? [];
+  _cache.set(companyCode, { data: items, expiresAt: Date.now() + CACHE_TTL_MS });
 
   return NextResponse.json({ items });
 }

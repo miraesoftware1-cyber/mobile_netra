@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ success: true, message: data.MSG });
 }
 
+let _cancelledReqsTableEnsured = false;
+
 async function postCancelCleanup(
   baseUrl: string,
   companyCode: string,
@@ -80,9 +82,12 @@ async function postCancelCleanup(
 
   // PG cancelled_reqs 기록 + ERP detail/approvers 조회 병렬 실행
   const [, detailData] = await Promise.all([
-    query(`CREATE TABLE IF NOT EXISTS netra_cancelled_reqs (
-      req_id INTEGER PRIMARY KEY, cancelled_at TIMESTAMPTZ DEFAULT NOW()
-    )`).catch(() => null).then(() =>
+    (_cancelledReqsTableEnsured
+      ? Promise.resolve()
+      : query(`CREATE TABLE IF NOT EXISTS netra_cancelled_reqs (
+          req_id INTEGER PRIMARY KEY, cancelled_at TIMESTAMPTZ DEFAULT NOW()
+        )`).catch(() => null).then(() => { _cancelledReqsTableEnsured = true; })
+    ).then(() =>
       query(
         `INSERT INTO netra_cancelled_reqs (req_id) VALUES ($1) ON CONFLICT DO NOTHING`,
         [reqId],
@@ -126,23 +131,14 @@ async function postCancelCleanup(
     return;
   }
 
-  const ph = approverCodes.map((_, i) => `$${i + 2}`).join(',');
   type SubRow = { subscription: webpush.PushSubscription; emp_code: string; user_id: string | null };
 
   // user_id로 먼저 조회, 없으면 emp_code 폴백 (user_id ≠ emp_code 거래처 대응)
-  let { rows: subs } = await query<SubRow>(
-    `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
-    [corpCode, ...approverCodes],
+  const { rows: subs } = await query<SubRow>(
+    `SELECT DISTINCT ON (endpoint) subscription, emp_code, user_id
+     FROM netra_push_subs WHERE corp_code = $1 AND (user_id = ANY($2) OR emp_code = ANY($2))`,
+    [corpCode, approverCodes],
   ).catch(() => ({ rows: [] as SubRow[] }));
-
-  if (subs.length === 0) {
-    const { rows: empSubs } = await query<SubRow>(
-      `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
-      [corpCode, ...approverCodes],
-    ).catch(() => ({ rows: [] as SubRow[] }));
-    console.log('[cancel] emp_code 폴백 조회:', empSubs.length, '건');
-    subs = empSubs;
-  }
 
   const { active: activeSubs, silent: silentSubs } = await categorizeSubscriptions(subs, corpCode);
   console.log('[cancel] 취소 푸시 대상 (일반:', activeSubs.length, '/ 무음:', silentSubs.length, ')');

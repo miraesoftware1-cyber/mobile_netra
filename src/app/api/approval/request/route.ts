@@ -69,18 +69,20 @@ export async function POST(request: NextRequest) {
   const reqId: number = createData?.items?.[0]?.REQ_ID ?? 0;
   if (!reqId) return NextResponse.json({ error: '요청 ID 누락' }, { status: 500 });
 
-  // 2. 단계별 승인자 등록
-  for (const apv of stepApprovers) {
-    const apvParams = new URLSearchParams({
-      proc: 'usp_mobile_apvmng_step_apv_add',
-      param1: String(reqId),
-      param2: String(apv.stepNo),
-      param3: apv.apvType,
-      param4: apv.empCode,
-      param5: String(apv.threshold),
-    });
-    await fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
-  }
+  // 2. 단계별 승인자 등록 (병렬)
+  await Promise.allSettled(
+    stepApprovers.map((apv) => {
+      const apvParams = new URLSearchParams({
+        proc: 'usp_mobile_apvmng_step_apv_add',
+        param1: String(reqId),
+        param2: String(apv.stepNo),
+        param3: apv.apvType,
+        param4: apv.empCode,
+        param5: String(apv.threshold),
+      });
+      return fetch(`${baseUrl}/R2JsonProc.asp?${apvParams}`, { cache: 'no-store' }).catch(() => null);
+    }),
+  );
 
   // 3. 1단계 승인자에게 푸쉬 알림 발송
   try {

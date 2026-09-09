@@ -35,7 +35,10 @@ async function erpGet(baseUrl: string, proc: string, params: Record<string, stri
   return res.json().catch(() => null);
 }
 
+let _actionsTableEnsured = false;
+
 async function ensureActionsTable() {
+  if (_actionsTableEnsured) return;
   await query(`
     CREATE TABLE IF NOT EXISTS netra_apvmng_actions (
       id        SERIAL PRIMARY KEY,
@@ -48,6 +51,7 @@ async function ensureActionsTable() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  _actionsTableEnsured = true;
 }
 
 async function pushToEmps(
@@ -192,25 +196,27 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 5. ERP 상태 UPDATE — 상태 변경이 있을 때만 호출
-  let setStepData: Record<string, unknown> | null = null;
-  if (needSetStep) {
-    setStepData = await erpGet(baseUrl, 'usp_mobile_apvmng_set_step', {
-      param1: String(reqId),
-      param2: newStatus,
-      param3: String(nextStepNo > 0 ? nextStepNo : curStep),
-    });
-    console.log('[action] set_step Flag:', setStepData?.Flag, 'MSG:', setStepData?.MSG);
-  }
+  // 5-7. ERP 상태 UPDATE + 요청자 정보 + 다음 단계 승인자 병렬 조회
+  const [setStepData, infoData, nextApvData] = await Promise.all([
+    needSetStep
+      ? erpGet(baseUrl, 'usp_mobile_apvmng_set_step', {
+          param1: String(reqId), param2: newStatus, param3: String(nextStepNo > 0 ? nextStepNo : curStep),
+        })
+      : Promise.resolve(null),
+    erpGet(baseUrl, 'usp_mobile_apvmng_req_info', { param1: String(reqId) }),
+    nextStepNo > 0
+      ? erpGet(baseUrl, 'usp_mobile_apvmng_step_approvers', { param1: String(reqId), param2: String(nextStepNo) })
+      : Promise.resolve(null),
+  ]);
+  if (setStepData !== null) console.log('[action] set_step Flag:', setStepData?.Flag, 'MSG:', setStepData?.MSG);
 
-  // 6. 요청자 정보 조회 (푸쉬용)
+  // 6. 요청자 정보 파싱
   let reqEmpCode = '';
   let reqEmpName = '';
   let menuId     = '';
   let payloadJson: Record<string, unknown> = {};
   try {
-    const infoData = await erpGet(baseUrl, 'usp_mobile_apvmng_req_info', { param1: String(reqId) });
-    const infoRow  = infoData?.items?.[0] ?? {};
+    const infoRow = infoData?.items?.[0] ?? {};
     reqEmpCode = String(infoRow.REQ_EMP_CODE ?? '');
     reqEmpName = String(infoRow.REQ_EMP_NAME ?? '');
     menuId     = String(infoRow.MENU_ID      ?? '');
@@ -218,30 +224,18 @@ export async function POST(request: NextRequest) {
   } catch { /* 무시 */ }
 
   // 7. 다음 단계 승인자에게 푸시
-  if (nextStepNo > 0) {
+  if (nextStepNo > 0 && nextApvData) {
     try {
-      const apvData = await erpGet(baseUrl, 'usp_mobile_apvmng_step_approvers', {
-        param1: String(reqId),
-        param2: String(nextStepNo),
-      });
-      const nextUserIds: string[] = (apvData?.items ?? [])
+      const nextUserIds: string[] = (nextApvData?.items ?? [])
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
       if (nextUserIds.length > 0) {
-        const ph = nextUserIds.map((_, i) => `$${i + 2}`).join(',');
         type SubRow = { subscription: webpush.PushSubscription; emp_code: string; user_id: string | null };
-        // user_id로 먼저 조회, 없으면 emp_code로 폴백 (user_id ≠ emp_code인 거래처 대응)
-        let { rows: nextSubs } = await query<SubRow>(
-          `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code = $1 AND user_id IN (${ph})`,
-          [corpCode, ...nextUserIds],
+        const { rows: nextSubs } = await query<SubRow>(
+          `SELECT DISTINCT ON (endpoint) subscription, emp_code, user_id
+           FROM netra_push_subs WHERE corp_code = $1 AND (user_id = ANY($2) OR emp_code = ANY($2))`,
+          [corpCode, nextUserIds],
         );
-        if (nextSubs.length === 0) {
-          const { rows: empSubs } = await query<SubRow>(
-            `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code = $1 AND emp_code IN (${ph})`,
-            [corpCode, ...nextUserIds],
-          );
-          nextSubs = empSubs;
-        }
         const { active: nextActive, silent: nextSilent } = await categorizeSubscriptions(nextSubs, corpCode);
         const nextBasePayload = {
           title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,

@@ -13,7 +13,10 @@ const schema = z.object({
   manage_dpt_codes: z.string(),
 });
 
+let _subsTableEnsured = false;
+
 async function ensureSubsTable() {
+  if (_subsTableEnsured) return;
   await query(`
     CREATE TABLE IF NOT EXISTS netra_push_subs (
       endpoint         TEXT        PRIMARY KEY,
@@ -25,13 +28,11 @@ async function ensureSubsTable() {
       updated_at       TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => null);
-  // 무음 알림 컬럼 (없으면 추가)
   await Promise.all([
     query(`ALTER TABLE netra_push_subs ADD COLUMN IF NOT EXISTS quiet_enabled BOOLEAN DEFAULT FALSE`).catch(() => null),
     query(`ALTER TABLE netra_push_subs ADD COLUMN IF NOT EXISTS quiet_start   VARCHAR(5)`).catch(() => null),
     query(`ALTER TABLE netra_push_subs ADD COLUMN IF NOT EXISTS quiet_end     VARCHAR(5)`).catch(() => null),
   ]);
-  // 기존 테이블 데이터 마이그레이션 (한 번만 실행, ON CONFLICT DO NOTHING)
   await query(`
     INSERT INTO netra_push_subs (endpoint, emp_code, user_id, corp_code, manage_dpt_codes, subscription, updated_at)
     SELECT subscription->>'endpoint', emp_code, user_id, corp_code, manage_dpt_codes, subscription, COALESCE(updated_at, NOW())
@@ -39,6 +40,7 @@ async function ensureSubsTable() {
     WHERE subscription->>'endpoint' IS NOT NULL
     ON CONFLICT (endpoint) DO NOTHING
   `).catch(() => null);
+  _subsTableEnsured = true;
 }
 
 export async function POST(request: NextRequest) {

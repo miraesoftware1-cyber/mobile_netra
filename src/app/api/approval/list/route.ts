@@ -76,16 +76,16 @@ export async function GET(request: NextRequest) {
   }
 
   if (status === 'PENDING') {
-    // ERP PENDING 목록에서 현재 단계를 이미 처리한 항목 및 취소된 항목 제외
-    const items = await fetchMerged('PENDING');
+    // ERP PENDING 목록과 취소된 req_ids 병렬 조회
+    const [items, cancelledResult] = await Promise.all([
+      fetchMerged('PENDING'),
+      query<{ req_id: number }>(`SELECT req_id FROM netra_cancelled_reqs`).catch(() => ({ rows: [] as { req_id: number }[] })),
+    ]);
     let cancelledReqIds: Set<number> = new Set();
     try {
-      const { rows: cRows } = await query<{ req_id: number }>(
-        `SELECT req_id FROM netra_cancelled_reqs`,
-      );
-      cancelledReqIds = new Set(cRows.map((r) => Number(r.req_id)));
-        if (cancelledReqIds.size > 0) console.log('[approval/list] 취소된 req_ids:', [...cancelledReqIds]);
-    } catch { /* 테이블 없으면 무시 */ }
+      cancelledReqIds = new Set(cancelledResult.rows.map((r) => Number(r.req_id)));
+      if (cancelledReqIds.size > 0) console.log('[approval/list] 취소된 req_ids:', [...cancelledReqIds]);
+    } catch { /* 무시 */ }
     console.log('[approval/list] ERP PENDING 목록:', items.map(i => ({ REQ_ID: i.REQ_ID, STATUS: i.STATUS, CURRENT_STEP: i.CURRENT_STEP })));
     const filtered = items.filter((item) =>
       !actedKeys.has(`${item.REQ_ID}:${item.CURRENT_STEP}`) && !cancelledReqIds.has(item.REQ_ID)
