@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, CheckCircle2, Clock, X, Check, XCircle, Loader2, RotateCcw } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
@@ -99,6 +99,7 @@ function ApprovalInboxContent() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [comment, setComment] = useState('');
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
 
   const fetchList = useCallback(async (status: 'PENDING' | 'APPROVED' | 'REJECTED') => {
     if (!companyCode || !empCode) return;
@@ -128,6 +129,12 @@ function ApprovalInboxContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, companyCode, empCode]);
+
+  useEffect(() => {
+    if (detail && bodyScrollRef.current) {
+      bodyScrollRef.current.scrollTop = 0;
+    }
+  }, [detail]);
 
   async function openDetail(reqId: number) {
     setDetailLoading(true);
@@ -349,7 +356,7 @@ function ApprovalInboxContent() {
                   </button>
                 </div>
 
-                <div className="px-5 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto">
+                <div ref={bodyScrollRef} className="px-5 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto">
                   {/* payload fields */}
                   <div className="flex flex-col gap-0 divide-y divide-gray-100 rounded-xl border border-gray-100">
                     {payloadToFields(detail.payload).map((f, i, arr) => (
