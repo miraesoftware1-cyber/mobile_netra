@@ -367,10 +367,10 @@ export function LeaveRequestForm() {
     <form
       onSubmit={handleSubmit(onSubmit)}
       method="post"
-      className="flex-1 flex flex-col min-h-0"
+      className="flex flex-col"
     >
-      {/* ── 고정 상단: 성명 / 신청일 / 총연차 / 잔여일수 ── */}
-      <div className="flex-shrink-0 flex flex-col gap-4 px-4 pt-5 pb-4 border-b border-gray-100">
+      {/* ── 상단: 성명 / 신청일 / 총연차 / 잔여일수 ── */}
+      <div className="flex flex-col gap-4 px-4 pt-5 pb-4 border-b border-gray-100">
         <div className="flex gap-3">
           <div className="flex-1 flex flex-col gap-1.5">
             <Label className="text-sm font-semibold text-gray-700">성명</Label>
@@ -420,8 +420,8 @@ export function LeaveRequestForm() {
         </div>
       </div>
 
-      {/* ── 스크롤 가능 영역: 구분 ~ 비고 (하단 fixed 버튼 높이만큼 여백) ── */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+      {/* ── 입력 영역: 구분 ~ 비고 ── */}
+      <div className="flex flex-col gap-4 px-4 py-4">
         {/* 구분 */}
         <FieldRow label="구분" error={errors.leaveTypeCode?.message}>
           <Controller
@@ -547,7 +547,7 @@ export function LeaveRequestForm() {
       </div>
 
       {/* ── 하단 버튼 영역 ── */}
-      <div className="flex-shrink-0 flex gap-3 border-t border-gray-100 bg-white px-4 pt-4 pb-4">
+      <div className="flex gap-3 border-t border-gray-100 bg-white px-4 pt-4 pb-4">
         <Button
           type="button"
           variant="outline"
