@@ -9,7 +9,7 @@
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_PROCESS' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_PROCESS (
-        PROC_ID           INT             IDENTITY(1,1)   NOT NULL,
+        PROC_ID           INT                             NOT NULL,
         PROC_NAME         NVARCHAR(100)                   NULL,
         CONFIG_JSON       NVARCHAR(MAX)                   NOT NULL,
         USE_YN            CHAR(1)                         NOT NULL   DEFAULT 'Y',
@@ -28,7 +28,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_REQUEST' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_REQUEST (
-        REQ_ID            INT             IDENTITY(1,1)   NOT NULL,
+        REQ_ID            INT                             NOT NULL,
         MENU_ID           NVARCHAR(50)                    NOT NULL,
         REQ_EMP_CODE      NVARCHAR(50)                    NOT NULL,
         REQ_EMP_NAME      NVARCHAR(100)                   NULL,
@@ -53,7 +53,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_STEP_APV' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_STEP_APV (
-        SA_ID             INT             IDENTITY(1,1)   NOT NULL,
+        SA_ID             INT                             NOT NULL,
         REQ_ID            INT                             NOT NULL,
         STEP_NO           INT                             NOT NULL,
         APV_TYPE          NVARCHAR(20)                    NOT NULL,  -- INDIVIDUAL / GROUP / DEPT_HEAD
@@ -73,7 +73,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_ACTION' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_ACTION (
-        ACT_ID            INT             IDENTITY(1,1)   NOT NULL,
+        ACT_ID            INT                             NOT NULL,
         REQ_ID            INT                             NOT NULL,
         STEP_NO           INT                             NOT NULL,
         APV_CODE          NVARCHAR(50)                    NOT NULL,
@@ -147,8 +147,9 @@ BEGIN
         END
         ELSE
         BEGIN
-            INSERT INTO TB_MOBILE_APVMNG_PROCESS (MENU_ID, PROC_NAME, CONFIG_JSON, USE_YN, REG_DT)
-            VALUES (@MENU_ID, @PROC_NAME, @CONFIG_JSON, 'Y', GETDATE())
+            INSERT INTO TB_MOBILE_APVMNG_PROCESS (PROC_ID, MENU_ID, PROC_NAME, CONFIG_JSON, USE_YN, REG_DT)
+            VALUES (COALESCE((SELECT MAX(PROC_ID) FROM TB_MOBILE_APVMNG_PROCESS), 0) + 1,
+                    @MENU_ID, @PROC_NAME, @CONFIG_JSON, 'Y', GETDATE())
         END
 
         SELECT '0' AS Flag, '저장되었습니다.' AS MSG
@@ -178,15 +179,14 @@ BEGIN
 
     BEGIN TRY
         DECLARE @REQ_ID INT
+        SET @REQ_ID = COALESCE((SELECT MAX(REQ_ID) FROM TB_MOBILE_APVMNG_REQUEST), 0) + 1
 
         INSERT INTO TB_MOBILE_APVMNG_REQUEST
-            (MENU_ID, REQ_EMP_CODE, REQ_EMP_NAME, PAYLOAD_JSON, PROC_SNAPSHOT,
+            (REQ_ID, MENU_ID, REQ_EMP_CODE, REQ_EMP_NAME, PAYLOAD_JSON, PROC_SNAPSHOT,
              TOTAL_STEPS, CURRENT_STEP, STATUS, REG_DT)
         VALUES
-            (@MENU_ID, @REQ_EMP_CODE, @REQ_EMP_NAME, @PAYLOAD_JSON, @PROC_SNAPSHOT,
+            (@REQ_ID, @MENU_ID, @REQ_EMP_CODE, @REQ_EMP_NAME, @PAYLOAD_JSON, @PROC_SNAPSHOT,
              @TOTAL_STEPS, 1, 'PENDING', GETDATE())
-
-        SET @REQ_ID = SCOPE_IDENTITY()
 
         SELECT '0' AS Flag, '승인 요청이 생성되었습니다.' AS MSG, @REQ_ID AS REQ_ID
     END TRY
@@ -211,8 +211,9 @@ BEGIN
     SET NOCOUNT ON
 
     BEGIN TRY
-        INSERT INTO TB_MOBILE_APVMNG_STEP_APV (REQ_ID, STEP_NO, APV_TYPE, EMP_CODE, THRESHOLD)
-        VALUES (@REQ_ID, @STEP_NO, @APV_TYPE, @EMP_CODE, @THRESHOLD)
+        INSERT INTO TB_MOBILE_APVMNG_STEP_APV (SA_ID, REQ_ID, STEP_NO, APV_TYPE, EMP_CODE, THRESHOLD)
+        VALUES (COALESCE((SELECT MAX(SA_ID) FROM TB_MOBILE_APVMNG_STEP_APV), 0) + 1,
+                @REQ_ID, @STEP_NO, @APV_TYPE, @EMP_CODE, @THRESHOLD)
 
         SELECT '0' AS Flag, '' AS MSG
     END TRY
@@ -365,8 +366,9 @@ BEGIN
         END
 
         -- 이력 저장
-        INSERT INTO TB_MOBILE_APVMNG_ACTION (REQ_ID, STEP_NO, APV_CODE, APV_NAME, ACTION, COMMENT, ACT_DT)
-        VALUES (@REQ_ID, @CURRENT_STEP, @APV_CODE, @APV_NAME, @ACTION, @COMMENT, GETDATE())
+        INSERT INTO TB_MOBILE_APVMNG_ACTION (ACT_ID, REQ_ID, STEP_NO, APV_CODE, APV_NAME, ACTION, COMMENT, ACT_DT)
+        VALUES (COALESCE((SELECT MAX(ACT_ID) FROM TB_MOBILE_APVMNG_ACTION), 0) + 1,
+                @REQ_ID, @CURRENT_STEP, @APV_CODE, @APV_NAME, @ACTION, @COMMENT, GETDATE())
 
         -- 반려이면 바로 종료
         IF @ACTION = 'REJECT'

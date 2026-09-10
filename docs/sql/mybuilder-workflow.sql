@@ -20,7 +20,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_PROCESS_STEP' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_PROCESS_STEP (
-        STEP_ID        INT          IDENTITY(1,1) NOT NULL,
+        STEP_ID        INT                        NOT NULL,
         PROC_ID        INT                        NOT NULL,
         STEP_NO        INT                        NOT NULL,
         STEP_TYPE      NVARCHAR(20)               NOT NULL,   -- individual / group / dept_head
@@ -43,7 +43,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_MENU_MAP' AND xtype = 'U')
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_MENU_MAP (
-        MAP_ID    INT          IDENTITY(1,1) NOT NULL,
+        MAP_ID    INT                        NOT NULL,
         MENU_ID   NVARCHAR(50)              NOT NULL,   -- LEAVE_01 / EXP_01 등
         MENU_NAME NVARCHAR(100)             NULL,       -- 연차 신청 / 지출 결의 등
         PROC_ID   INT                       NOT NULL,
@@ -119,8 +119,9 @@ GO
 -- order by proc_id
 
 -- ON(INSERT)
--- insert into TB_MOBILE_APVMNG_PROCESS (proc_name, config_json, use_yn, reg_dt)
--- values (:grd_mst.proc_name, '{}', :grd_mst.use_yn, getdate())
+-- insert into TB_MOBILE_APVMNG_PROCESS (proc_id, proc_name, config_json, use_yn, reg_dt)
+-- values (coalesce((select max(proc_id) from TB_MOBILE_APVMNG_PROCESS), 0) + 1,
+--         :grd_mst.proc_name, '{}', :grd_mst.use_yn, getdate())
 
 -- ON(UPDATE)
 -- update TB_MOBILE_APVMNG_PROCESS
@@ -150,9 +151,10 @@ GO
 
 -- ON(INSERT)
 -- insert into TB_MOBILE_APVMNG_PROCESS_STEP
---     (proc_id, step_no, step_type, apv_code, apv_name, threshold, push_yn, allow_final_yn)
+--     (step_id, proc_id, step_no, step_type, apv_code, apv_name, threshold, push_yn, allow_final_yn)
 -- values
---     (#grd_mst.proc_id, :grd_itm.step_no, :grd_itm.step_type,
+--     (coalesce((select max(step_id) from TB_MOBILE_APVMNG_PROCESS_STEP), 0) + 1,
+--      #grd_mst.proc_id, :grd_itm.step_no, :grd_itm.step_type,
 --      :grd_itm.apv_code, :grd_itm.apv_name,
 --      :grd_itm.threshold, :grd_itm.push_yn, :grd_itm.allow_final_yn)
 
@@ -191,8 +193,9 @@ GO
 -- order by menu_id
 
 -- ON(INSERT)
--- insert into TB_MOBILE_APVMNG_MENU_MAP (menu_id, menu_name, proc_id, use_yn, reg_dt)
--- values (:grd_map.menu_id, :grd_map.menu_name, :grd_map.proc_id, :grd_map.use_yn, getdate())
+-- insert into TB_MOBILE_APVMNG_MENU_MAP (map_id, menu_id, menu_name, proc_id, use_yn, reg_dt)
+-- values (coalesce((select max(map_id) from TB_MOBILE_APVMNG_MENU_MAP), 0) + 1,
+--         :grd_map.menu_id, :grd_map.menu_name, :grd_map.proc_id, :grd_map.use_yn, getdate())
 
 -- ON(UPDATE)
 -- update TB_MOBILE_APVMNG_MENU_MAP
