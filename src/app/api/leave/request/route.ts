@@ -147,23 +147,36 @@ async function prepareApproval(args: {
   const procRaw = procRes?.ok ? await procRes.json().catch(() => null) : null;
   console.log('[approval] process_get Flag:', procRaw?.Flag);
 
-  if (!procRaw || String(procRaw.Flag) !== '0' || !procRaw.items?.[0]?.CONFIG_JSON) {
+  if (!procRaw || String(procRaw.Flag) !== '0' || !procRaw.items?.length) {
     return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
   }
 
-  const config: {
-    steps: { stepNo: number; type: string; members: { empCode: string; empName: string }[]; threshold: number; messageTitle?: string; messageBody?: string }[];
-  } = JSON.parse(procRaw.items[0].CONFIG_JSON);
-
-  if (!config.steps?.length) return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
+  // PROCESS_STEP rows → step_no 기준 집계
+  const rawItems: Record<string, unknown>[] = procRaw.items;
+  const stepMap = new Map<number, { stepNo: number; type: string; apvCode: string; threshold: number; messageTitle: string; messageBody: string }>();
+  for (const item of rawItems) {
+    const no = Number(item.STEP_NO);
+    if (!stepMap.has(no)) {
+      stepMap.set(no, {
+        stepNo:       no,
+        type:         (item.STEP_TYPE    as string) ?? 'individual',
+        apvCode:      (item.APV_CODE     as string) ?? '',
+        threshold:    Number(item.THRESHOLD ?? 1),
+        messageTitle: (item.MSG_TITLE    as string) ?? '',
+        messageBody:  (item.MSG_BODY     as string) ?? '',
+      });
+    }
+  }
+  const steps = [...stepMap.values()].sort((a, b) => a.stepNo - b.stepNo);
+  if (!steps.length) return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
 
   // 2. INDIVIDUAL/DEPT_HEAD 승인자 즉시 resolve (그룹은 after()에서 처리)
   const stepApprovers: StepApprover[] = [];
-  for (const step of config.steps) {
+  for (const step of steps) {
     if (step.type === 'group') {
-      // 그룹 멤버 조회는 느려서 after()에서 처리 — placeholder 저장
-      for (const m of step.members ?? []) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: m.empCode, userId: m.empCode, threshold: step.threshold });
+      // group: APV_CODE = USER_GROUP명 (_신입사원 등), after()에서 ENV_USER 조회
+      if (step.apvCode) {
+        stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: step.apvCode, userId: step.apvCode, threshold: step.threshold });
       }
     } else if (step.type === 'dept_head') {
       // 부서장은 PG에서 즉시 조회 (빠름)
@@ -175,8 +188,9 @@ async function prepareApproval(args: {
         stepApprovers.push({ stepNo: step.stepNo, apvType: 'DEPT_HEAD', empCode: h.emp_code, threshold: 1 });
       }
     } else {
-      for (const m of step.members ?? []) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType: 'INDIVIDUAL', empCode: m.empCode, userId: m.empCode, threshold: step.threshold });
+      // individual: APV_CODE = 사원코드
+      if (step.apvCode) {
+        stepApprovers.push({ stepNo: step.stepNo, apvType: 'INDIVIDUAL', empCode: step.apvCode, userId: step.apvCode, threshold: step.threshold });
       }
     }
   }
@@ -191,7 +205,7 @@ async function prepareApproval(args: {
   const createParams = new URLSearchParams({
     proc: 'usp_mobile_apvmng_request_create',
     param1: 'LEAVE_01', param2: emp_code, param3: emp_name,
-    param4: JSON.stringify(payloadJson), param5: '{}', param6: String(config.steps.length),
+    param4: JSON.stringify(payloadJson), param5: '{}', param6: String(steps.length),
   });
   const createRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${createParams}`, { cache: 'no-store' });
   const createData = await createRes?.json().catch(() => null);
@@ -222,7 +236,7 @@ async function prepareApproval(args: {
   return {
     kind: 'flow', baseUrl, companyCode, corp_code, emp_code, emp_name,
     leaveTypeName, leaveTypeCode, startDate, endDate, usedDays, dpt_code,
-    reqId, stepApprovers, step1Config: config.steps[0],
+    reqId, stepApprovers, step1Config: steps[0],
   };
 }
 

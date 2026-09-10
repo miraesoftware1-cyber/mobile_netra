@@ -10,7 +10,6 @@ IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_PROCESS' 
 BEGIN
     CREATE TABLE TB_MOBILE_APVMNG_PROCESS (
         PROC_ID           INT             IDENTITY(1,1)   NOT NULL,
-        MENU_ID           NVARCHAR(50)                    NOT NULL,
         PROC_NAME         NVARCHAR(100)                   NULL,
         CONFIG_JSON       NVARCHAR(MAX)                   NOT NULL,
         USE_YN            CHAR(1)                         NOT NULL   DEFAULT 'Y',
@@ -20,8 +19,7 @@ BEGIN
         CREATED_BY        VARCHAR(30)                     NULL,
         LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
         LAST_UPDATED_BY   VARCHAR(30)                     NULL,
-        CONSTRAINT PK_APVMNG_PROCESS PRIMARY KEY (PROC_ID),
-        CONSTRAINT UQ_APVMNG_PROCESS_MENU UNIQUE (MENU_ID)
+        CONSTRAINT PK_APVMNG_PROCESS PRIMARY KEY (PROC_ID)
     )
 END
 GO

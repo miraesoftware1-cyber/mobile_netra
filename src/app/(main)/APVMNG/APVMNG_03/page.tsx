@@ -135,7 +135,7 @@ export default function APVMNG03Page() {
           menuName: menu.name,
           exists:   data?.exists === true,
           procName: data?.procName ?? "",
-          steps:    (data?.config?.steps ?? []) as Step[],
+          steps:    (data?.steps ?? []) as Step[],
         } satisfies ProcessInfo;
       }),
     )
