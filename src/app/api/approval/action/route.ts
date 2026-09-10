@@ -13,6 +13,25 @@ const MENU_LABEL: Record<string, string> = {
 };
 function getMenuLabel(id: string) { return MENU_LABEL[id] ?? id; }
 
+function fmtDate(d: string) {
+  if (!d || d.length < 8) return d;
+  return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
+}
+
+function applyMsgVars(template: string, vars: {
+  requesterName: string; menuName: string;
+  startDate: string; endDate: string; usedDays: string; stepNo: number;
+}): string {
+  return template
+    .replace(/\{신청자\}/g,        vars.requesterName)
+    .replace(/\{requesterName\}/g, vars.requesterName)
+    .replace(/\{문서명\}/g,         vars.menuName)
+    .replace(/\{menuName\}/g,      vars.menuName)
+    .replace(/\{기간\}/g,           `${fmtDate(vars.startDate)}~${fmtDate(vars.endDate)}`)
+    .replace(/\{일수\}/g,           vars.usedDays)
+    .replace(/\{단계\}/g,           `${vars.stepNo}단계`);
+}
+
 const actionSchema = z.object({
   companyCode: z.string().min(1),
   corpCode:    z.string().min(1),
@@ -230,6 +249,31 @@ export async function POST(request: NextRequest) {
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
       if (nextUserIds.length > 0) {
+        // PROCESS_STEP에서 다음 단계 MSG_TITLE / MSG_BODY 조회
+        let msgTitle = `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`;
+        let msgBody  = `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`;
+        if (menuId) {
+          const procData = await erpGet(baseUrl, 'usp_mobile_apvmng_process_get', { param1: menuId });
+          const procItems: Record<string, unknown>[] = procData?.items ?? [];
+          const stepItem = procItems.find((r) => Number(r.STEP_NO) === nextStepNo);
+          if (stepItem) {
+            const rawTitle = String(stepItem.MSG_TITLE ?? '').trim();
+            const rawBody  = String(stepItem.MSG_BODY  ?? '').trim();
+            if (rawTitle) msgTitle = rawTitle;
+            if (rawBody)  msgBody  = rawBody;
+          }
+        }
+        const vars = {
+          requesterName: reqEmpName || '신청자',
+          menuName:      getMenuLabel(menuId || '승인'),
+          startDate:     String(payloadJson._start_date ?? ''),
+          endDate:       String(payloadJson._end_date   ?? ''),
+          usedDays:      String(payloadJson._used_days  ?? ''),
+          stepNo:        nextStepNo,
+        };
+        msgTitle = applyMsgVars(msgTitle, vars);
+        msgBody  = applyMsgVars(msgBody,  vars);
+
         type SubRow = { subscription: webpush.PushSubscription; emp_code: string; user_id: string | null };
         const { rows: nextSubs } = await query<SubRow>(
           `SELECT DISTINCT ON (endpoint) subscription, emp_code, user_id
@@ -238,10 +282,10 @@ export async function POST(request: NextRequest) {
         );
         const { active: nextActive, silent: nextSilent } = await categorizeSubscriptions(nextSubs, corpCode);
         const nextBasePayload = {
-          title: `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`,
-          body: `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`,
-          url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
-          tag: `approval-${reqId}`,
+          title: msgTitle,
+          body:  msgBody,
+          url:   `/APVMNG/APVMNG_01?requestId=${reqId}`,
+          tag:   `approval-${reqId}`,
         };
         await Promise.allSettled([
           ...nextActive.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
