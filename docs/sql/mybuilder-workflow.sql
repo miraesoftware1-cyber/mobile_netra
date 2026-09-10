@@ -46,8 +46,6 @@ BEGIN
         MENU_NAME NVARCHAR(100)             NULL,       -- 연차 신청 / 지출 결의 등
         PROC_ID   INT                       NOT NULL,
         USE_YN    CHAR(1)                   NOT NULL DEFAULT 'Y',
-        REG_DT    DATETIME                  NOT NULL DEFAULT GETDATE(),
-        UPD_DT    DATETIME                  NULL,
         CREATION_DATE    VARCHAR(14)        NULL,
         CREATED_BY       VARCHAR(30)        NULL,
         LAST_UPDATE_DATE VARCHAR(14)        NULL,
@@ -188,9 +186,9 @@ GO
 -- order by menu_id
 
 -- ON(INSERT)
--- insert into TB_MOBILE_APVMNG_MENU_MAP (map_id, menu_id, menu_name, proc_id, use_yn, reg_dt)
+-- insert into TB_MOBILE_APVMNG_MENU_MAP (map_id, menu_id, menu_name, proc_id, use_yn)
 -- values (coalesce((select max(map_id) from TB_MOBILE_APVMNG_MENU_MAP), 0) + 1,
---         :grd_map.menu_id, :grd_map.menu_name, :grd_map.proc_id, :grd_map.use_yn, getdate())
+--         :grd_map.menu_id, :grd_map.menu_name, :grd_map.proc_id, :grd_map.use_yn)
 
 -- ON(UPDATE)
 -- update TB_MOBILE_APVMNG_MENU_MAP
