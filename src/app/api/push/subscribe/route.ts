@@ -86,3 +86,25 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  const endpoint: string | undefined = body?.endpoint;
+  const empCode: string | undefined  = body?.emp_code;
+  if (!endpoint && !empCode) {
+    return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
+  }
+  try {
+    if (endpoint) {
+      await query(`DELETE FROM netra_push_subs WHERE endpoint = $1`, [endpoint]).catch(() => null);
+      await query(`DELETE FROM netra_push_subscriptions WHERE subscription->>'endpoint' = $1`, [endpoint]).catch(() => null);
+    } else {
+      await query(`DELETE FROM netra_push_subs WHERE emp_code = $1`, [empCode]).catch(() => null);
+      await query(`DELETE FROM netra_push_subscriptions WHERE emp_code = $1`, [empCode]).catch(() => null);
+    }
+  } catch (err) {
+    console.error('[push/subscribe] 구독 삭제 실패:', err);
+    return NextResponse.json({ error: '구독 삭제 실패' }, { status: 500 });
+  }
+  return NextResponse.json({ success: true });
+}

@@ -274,6 +274,21 @@ export async function POST(request: NextRequest) {
         msgTitle = applyMsgVars(msgTitle, vars);
         msgBody  = applyMsgVars(msgBody,  vars);
 
+        // Postgres에서 푸시 버튼 설정 조회
+        let pushCfg = { apvBtnLabel: '승인', rejBtnLabel: '반려', apvBtnAction: 'open_app', rejBtnAction: 'require_reason' };
+        if (menuId) {
+          try {
+            const { rows: cfgRows } = await query<{ apv_btn_label: string; rej_btn_label: string; apv_btn_action: string; rej_btn_action: string }>(
+              'SELECT apv_btn_label, rej_btn_label, apv_btn_action, rej_btn_action FROM netra_apvmng_config WHERE menu_id = $1',
+              [menuId],
+            );
+            if (cfgRows[0]) {
+              const r = cfgRows[0];
+              pushCfg = { apvBtnLabel: r.apv_btn_label, rejBtnLabel: r.rej_btn_label, apvBtnAction: r.apv_btn_action, rejBtnAction: r.rej_btn_action };
+            }
+          } catch { /* 무시 */ }
+        }
+
         type SubRow = { subscription: webpush.PushSubscription; emp_code: string; user_id: string | null };
         const { rows: nextSubs } = await query<SubRow>(
           `SELECT DISTINCT ON (endpoint) subscription, emp_code, user_id
@@ -286,11 +301,36 @@ export async function POST(request: NextRequest) {
           body:  msgBody,
           url:   `/APVMNG/APVMNG_01?requestId=${reqId}`,
           tag:   `approval-${reqId}`,
+          apvBtnLabel:  pushCfg.apvBtnLabel,
+          rejBtnLabel:  pushCfg.rejBtnLabel,
+          apvBtnAction: pushCfg.apvBtnAction,
+          rejBtnAction: pushCfg.rejBtnAction,
         };
         await Promise.allSettled([
           ...nextActive.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
           ...nextSilent.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, silent: true, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
         ]);
+      }
+    } catch { /* 무시 */ }
+  }
+
+  // 7b. 반려 확정 → 같은 단계 다른 승인자에게 "처리완료" 알림으로 교체 (tag 동일 → Android에서 기존 알림 덮어씀)
+  if (newStatus === 'REJECTED') {
+    try {
+      const sameStepData = await erpGet(baseUrl, 'usp_mobile_apvmng_step_approvers', {
+        param1: String(reqId), param2: String(curStep),
+      });
+      const otherCodes = ((sameStepData?.items ?? []) as Record<string, unknown>[])
+        .map((r) => String(r.EMP_CODE ?? ''))
+        .filter((c) => c && c !== empCode);
+      if (otherCodes.length > 0) {
+        await pushToEmps(
+          corpCode, otherCodes,
+          '승인 불필요',
+          `${getMenuLabel(menuId || '요청')} 요청이 반려 처리되었습니다.`,
+          reqId,
+          // approvalMeta 없음 → 버튼 없는 알림으로 기존 승인 요청 알림 교체
+        );
       }
     } catch { /* 무시 */ }
   }

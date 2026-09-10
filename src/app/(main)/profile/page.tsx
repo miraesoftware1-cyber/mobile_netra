@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { User, Building2, LogOut, Type, IdCard, Atom, BellOff, Minus, Plus } from "lucide-react";
+import { User, Building2, LogOut, Type, IdCard, Atom, BellOff, Bell, Minus, Plus } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -89,6 +89,16 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const arr = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) arr[i] = rawData.charCodeAt(i);
+  return arr.buffer;
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -102,6 +112,65 @@ export default function ProfilePage() {
   const [quietEnabled, setQuietEnabled] = useState(quietHours.enabled);
   const [quietStart, setQuietStart]     = useState(quietHours.start);
   const [quietEnd, setQuietEnd]         = useState(quietHours.end);
+
+  // 알림 구독 상태
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
+  const [notifSubscribed, setNotifSubscribed] = useState(false);
+  const [notifLoading, setNotifLoading]       = useState(false);
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return;
+    setNotifPermission(Notification.permission);
+    navigator.serviceWorker.ready.then((reg) =>
+      reg.pushManager.getSubscription().then((sub) => setNotifSubscribed(!!sub))
+    ).catch(() => null);
+  }, []);
+
+  const handleNotifToggle = useCallback(async () => {
+    if (!user || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    setNotifLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+
+      if (existing && notifSubscribed) {
+        // 구독 해제
+        await existing.unsubscribe();
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: existing.endpoint, emp_code: user.emp_code }),
+        }).catch(() => null);
+        setNotifSubscribed(false);
+      } else {
+        // 구독 등록
+        const permission = await Notification.requestPermission();
+        setNotifPermission(permission);
+        if (permission !== 'granted') return;
+        if (existing) await existing.unsubscribe();
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscription: sub.toJSON(),
+            emp_code: user.emp_code,
+            user_id: user.user_id,
+            corp_code: user.corp_code,
+            manage_dpt_codes: user.manage_dpt_codes,
+          }),
+        });
+        setNotifSubscribed(true);
+      }
+    } catch (err) {
+      console.error('[profile] 알림 토글 실패:', err);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, [user, notifSubscribed]);
 
   // 스토어 값이 바뀌면(로그인 직후 prefetch 완료 시) 동기화
   useEffect(() => {
@@ -188,6 +257,36 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
+
+          {/* 알림 허용 */}
+          {notifPermission !== null && (
+            <div className="flex flex-col border-b border-gray-50">
+              <div className="flex items-center gap-3 px-4 py-4">
+                <Bell className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                <span className="flex-1 text-sm text-gray-700">알림</span>
+                {notifPermission === 'denied' ? (
+                  <span className="text-xs text-red-400">브라우저에서 차단됨</span>
+                ) : (
+                  <button
+                    onClick={handleNotifToggle}
+                    disabled={notifLoading}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                      notifSubscribed ? 'bg-primary' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      notifSubscribed ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                )}
+              </div>
+              {notifPermission === 'denied' && (
+                <p className="text-xs text-gray-400 px-4 pb-3 -mt-1">
+                  기기 설정 → 브라우저 → 알림에서 허용해주세요.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 무음 알림 시간대 */}
           <div className="border-b border-gray-50">
