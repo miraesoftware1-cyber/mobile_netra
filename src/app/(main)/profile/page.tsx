@@ -66,7 +66,7 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
   const setM = (newM: number) => onChange(`${fmt(h)}:${fmt(newM)}`);
 
   return (
-    <div className="flex items-center gap-5">
+    <div className="flex items-center gap-3">
       <Stepper
         value={h} unit="시" min={0} max={23}
         onInc={() => setH(h >= 23 ? 0 : h + 1)}
@@ -211,15 +211,15 @@ export default function ProfilePage() {
             </div>
             {quietEnabled && (
               <div className="px-4 pb-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-400 w-8">시작</span>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-400">시작</span>
                   <TimePicker
                     value={quietStart}
                     onChange={(v) => { setQuietStart(v); saveQuietHours(quietEnabled, v, quietEnd); }}
                   />
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-400 w-8">종료</span>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-400">종료</span>
                   <TimePicker
                     value={quietEnd}
                     onChange={(v) => { setQuietEnd(v); saveQuietHours(quietEnabled, quietStart, v); }}

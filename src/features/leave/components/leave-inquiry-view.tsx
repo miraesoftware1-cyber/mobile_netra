@@ -264,7 +264,7 @@ export function LeaveInquiryView() {
 
           <Card className="flex flex-1 min-h-0 flex-col border-gray-100 shadow-sm overflow-hidden">
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-y-contain">
-              <div className="min-w-[20rem]">
+              <div className="min-w-max w-full">
                 <div
                   className={cn(
                     GRID_COLS,
