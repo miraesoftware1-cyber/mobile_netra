@@ -450,7 +450,7 @@ function ApprovalInboxContent() {
                       onChange={(e) => setComment(e.target.value)}
                       placeholder="의견을 입력하세요 (선택)"
                       rows={2}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 overflow-hidden"
                     />
                   )}
                 </div>
