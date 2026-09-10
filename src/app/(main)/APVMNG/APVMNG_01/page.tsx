@@ -318,7 +318,7 @@ function ApprovalInboxContent() {
           onClick={() => { if (!actionLoading) setDetail(null); }}
         >
           <div
-            className="bg-white w-full max-w-sm rounded-2xl max-h-[85vh] flex flex-col shadow-xl"
+            className="bg-white w-full max-w-sm rounded-2xl max-h-[85vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {detailLoading ? (
@@ -349,11 +349,14 @@ function ApprovalInboxContent() {
                   </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 min-h-0 px-5 py-4 flex flex-col gap-4">
+                <div className="px-5 py-4 flex flex-col gap-4">
                   {/* payload fields */}
-                  <div className="flex flex-col gap-0 divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden">
-                    {payloadToFields(detail.payload).map((f) => (
-                      <div key={f.label} className="flex items-center justify-between px-4 py-3 bg-white">
+                  <div className="flex flex-col gap-0 divide-y divide-gray-100 rounded-xl border border-gray-100">
+                    {payloadToFields(detail.payload).map((f, i, arr) => (
+                      <div
+                        key={f.label}
+                        className={`flex items-center justify-between px-4 py-3 bg-white${i === 0 ? ' rounded-t-xl' : ''}${i === arr.length - 1 ? ' rounded-b-xl' : ''}`}
+                      >
                         <span className="text-sm text-gray-500 shrink-0">{f.label}</span>
                         <span className="text-sm font-semibold text-gray-900 text-right ml-4">{f.value}</span>
                       </div>
@@ -445,8 +448,8 @@ function ApprovalInboxContent() {
                   )}
                 </div>
 
-                {/* 버튼 */}
-                <div className="px-5 pt-3 border-t border-gray-100 flex flex-col gap-2" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+                {/* 버튼 - 하단 고정 */}
+                <div className="sticky bottom-0 bg-white px-5 pt-3 border-t border-gray-100 flex flex-col gap-2" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
                   {canAct ? (
                     <>
                       <div className="flex gap-2">
