@@ -2,21 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { query } from '@/lib/db/postgres';
 
-async function ensurePrefsTable() {
-  await query(`
-    CREATE TABLE IF NOT EXISTS netra_user_prefs (
-      corp_code     VARCHAR(50)  NOT NULL,
-      emp_code      VARCHAR(100) NOT NULL,
-      user_id       VARCHAR(100),
-      quiet_enabled BOOLEAN      NOT NULL DEFAULT FALSE,
-      quiet_start   VARCHAR(5),
-      quiet_end     VARCHAR(5),
-      updated_at    TIMESTAMPTZ  DEFAULT NOW(),
-      PRIMARY KEY   (corp_code, emp_code)
-    )
-  `).catch(() => null);
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const empCode  = searchParams.get('empCode') ?? '';
@@ -25,8 +10,6 @@ export async function GET(request: NextRequest) {
   if (!corpCode || (!empCode && !userId)) {
     return NextResponse.json({ error: '필수 파라미터 누락' }, { status: 400 });
   }
-
-  await ensurePrefsTable();
 
   const { rows } = await query<{
     quiet_enabled: boolean;
@@ -63,7 +46,6 @@ export async function PUT(request: NextRequest) {
 
   const { empCode, userId, corpCode, enabled, start, end } = parsed.data;
 
-  await ensurePrefsTable();
   await query(
     `INSERT INTO netra_user_prefs (corp_code, emp_code, user_id, quiet_enabled, quiet_start, quiet_end, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, NOW())
