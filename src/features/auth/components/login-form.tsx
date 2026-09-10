@@ -43,7 +43,8 @@ const getErr = (r: AnyResult): string =>
 
 export function LoginForm() {
   const router = useRouter();
-  const login = useAuthStore((s) => s.login);
+  const login         = useAuthStore((s) => s.login);
+  const setQuietHours = useAuthStore((s) => s.setQuietHours);
   const hasDeviceRegistered = useAuthStore((s) => s.hasDeviceRegistered);
   const registerDevice = useAuthStore((s) => s.registerDevice);
 
@@ -87,6 +88,13 @@ export function LoginForm() {
       phoneNumber: context.phoneNumber,
       ...authFields,
     });
+    // 로그인 직후 quiet hours 백그라운드 prefetch → 프로필 페이지 즉시 표시
+    fetch(`/api/push/quiet-hours?empCode=${authFields.emp_code}&userId=${authFields.user_id}&corpCode=${authFields.corp_code}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) setQuietHours({ enabled: data.enabled ?? false, start: data.start ?? '22:00', end: data.end ?? '07:00' });
+      })
+      .catch(() => {});
     router.push("/menu");
   };
 

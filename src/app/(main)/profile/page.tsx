@@ -96,30 +96,29 @@ export default function ProfilePage() {
   const fontSize = useFontSizeStore((s) => s.fontSize);
   const setFontSize = useFontSizeStore((s) => s.setFontSize);
 
-  const [quietEnabled, setQuietEnabled] = useState(false);
-  const [quietStart, setQuietStart]     = useState('22:00');
-  const [quietEnd, setQuietEnd]         = useState('07:00');
+  const quietHours    = useAuthStore((s) => s.quietHours);
+  const setQuietHours = useAuthStore((s) => s.setQuietHours);
 
+  const [quietEnabled, setQuietEnabled] = useState(quietHours.enabled);
+  const [quietStart, setQuietStart]     = useState(quietHours.start);
+  const [quietEnd, setQuietEnd]         = useState(quietHours.end);
+
+  // 스토어 값이 바뀌면(로그인 직후 prefetch 완료 시) 동기화
   useEffect(() => {
-    if (!user?.emp_code || !user?.corp_code) return;
-    fetch(`/api/push/quiet-hours?empCode=${user.emp_code}&userId=${user.user_id}&corpCode=${user.corp_code}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (!data) return;
-        setQuietEnabled(data.enabled ?? false);
-        setQuietStart(data.start ?? '22:00');
-        setQuietEnd(data.end ?? '07:00');
-      }).catch(() => {});
-  }, [user?.emp_code, user?.corp_code]);
+    setQuietEnabled(quietHours.enabled);
+    setQuietStart(quietHours.start);
+    setQuietEnd(quietHours.end);
+  }, [quietHours]);
 
   const saveQuietHours = useCallback(async (enabled: boolean, start: string, end: string) => {
     if (!user?.emp_code || !user?.corp_code) return;
+    setQuietHours({ enabled, start, end });
     await fetch('/api/push/quiet-hours', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ empCode: user.emp_code, userId: user.user_id, corpCode: user.corp_code, enabled, start, end }),
     }).catch(() => {});
-  }, [user?.emp_code, user?.corp_code]);
+  }, [user?.emp_code, user?.corp_code, setQuietHours]);
 
   const handleLogout = () => {
     logout();

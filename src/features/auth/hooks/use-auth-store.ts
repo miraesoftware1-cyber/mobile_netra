@@ -20,12 +20,20 @@ export interface AuthUser {
   user_type: string;
 }
 
+export interface QuietHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
 interface AuthStore {
   user: AuthUser | null;
+  quietHours: QuietHours;
   biometricRegisteredMap: Record<string, true>;
   deviceTokenMap: Record<string, true>;
   login: (user: AuthUser) => void;
   logout: () => void;
+  setQuietHours: (q: QuietHours) => void;
   isLoggedIn: () => boolean;
   hasBiometricRegistered: (companyCode: string, phoneNumber: string) => boolean;
   registerBiometric: (companyCode: string, phoneNumber: string) => void;
@@ -40,10 +48,12 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
+      quietHours: { enabled: false, start: '22:00', end: '07:00' },
       biometricRegisteredMap: {},
       deviceTokenMap: {},
       login: (user) => set({ user }),
-      logout: () => set({ user: null }),
+      logout: () => set({ user: null, quietHours: { enabled: false, start: '22:00', end: '07:00' } }),
+      setQuietHours: (q) => set({ quietHours: q }),
       isLoggedIn: () => get().user !== null,
       hasBiometricRegistered: (companyCode, phoneNumber) => {
         const key = toBiometricKey(companyCode, phoneNumber);
