@@ -1,3 +1,7 @@
+// 새 SW 설치 즉시 활성화 (대기 없이)
+self.addEventListener("install", (event) => { self.skipWaiting(); });
+self.addEventListener("activate", (event) => { event.waitUntil(clients.claim()); });
+
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   const data = event.data.json();

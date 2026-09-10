@@ -66,6 +66,12 @@ export async function POST(request: NextRequest) {
          updated_at       = NOW()`,
       [subscription.endpoint, emp_code, user_id, corp_code, manage_dpt_codes, JSON.stringify(subscription)],
     );
+    // 같은 emp_code의 오래된 구독 정리 (최신 1개만 유지)
+    await query(
+      `DELETE FROM netra_push_subs
+       WHERE emp_code = $1 AND endpoint != $2`,
+      [emp_code, subscription.endpoint],
+    ).catch(() => null);
     // 기존 테이블도 upsert (하위 호환)
     await query(`ALTER TABLE netra_push_subscriptions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100)`).catch(() => null);
     await query(
