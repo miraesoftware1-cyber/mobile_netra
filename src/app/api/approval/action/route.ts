@@ -264,11 +264,11 @@ export async function POST(request: NextRequest) {
           }
         }
         const vars = {
-          requesterName: reqEmpName || '신청자',
+          requesterName: reqEmpName || String(payloadJson['신청자'] ?? '') || '신청자',
           menuName:      getMenuLabel(menuId || '승인'),
-          startDate:     String(payloadJson._start_date ?? ''),
-          endDate:       String(payloadJson._end_date   ?? ''),
-          usedDays:      String(payloadJson._used_days  ?? ''),
+          startDate:     String(payloadJson['시작일'] ?? ''),
+          endDate:       String(payloadJson['종료일'] ?? ''),
+          usedDays:      String(payloadJson['일수']   ?? ''),
           stepNo:        nextStepNo,
         };
         msgTitle = applyMsgVars(msgTitle, vars);

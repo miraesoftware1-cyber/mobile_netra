@@ -119,7 +119,7 @@ function replaceVars(
   const fmt = (d: string) => `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
   return template
     .replace('{신청자}',   emp_name || emp_code)
-    .replace('{문서명}',   leaveTypeName || leaveTypeCode)
+    .replace('{문서명}',   '연차 신청')
     .replace('{기간}',     `${fmt(startDate)}~${fmt(endDate)}`)
     .replace('{일수}',     `${usedDays}일`)
     .replace('{단계}',     `${stepNo}단계`)
