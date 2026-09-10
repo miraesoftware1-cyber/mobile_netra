@@ -37,12 +37,11 @@ self.addEventListener("push", (event) => {
 
 function openApp(url) {
   return clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-    for (const client of list) {
-      if (client.url.includes(self.location.origin) && "focus" in client) {
-        client.focus();
-        client.navigate(url);
-        return;
-      }
+    const appClient = list.find((c) => c.url.startsWith(self.location.origin));
+    if (appClient) {
+      return appClient.focus()
+        .then(() => appClient.navigate(url))
+        .catch(() => clients.openWindow(url));
     }
     return clients.openWindow(url);
   });

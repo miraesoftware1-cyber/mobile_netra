@@ -353,11 +353,28 @@ async function sendNotifications(setup: ApprovalSetup) {
   const msgTitle = replaceVars(step1Config?.messageTitle ?? '연차 신청 알림', varArgs);
   const msgBody  = replaceVars(step1Config?.messageBody  ?? '{신청자}님이 연차를 신청했습니다.', varArgs);
 
+  // 푸시 버튼 설정 조회 (Postgres)
+  let pushCfg = { apvBtnLabel: '승인', rejBtnLabel: '반려', apvBtnAction: 'open_app', rejBtnAction: 'require_reason' };
+  try {
+    const { rows: cfgRows } = await query<{ apv_btn_label: string; rej_btn_label: string; apv_btn_action: string; rej_btn_action: string }>(
+      'SELECT apv_btn_label, rej_btn_label, apv_btn_action, rej_btn_action FROM netra_apvmng_config WHERE menu_id = $1',
+      ['LEAVE_01'],
+    );
+    if (cfgRows[0]) {
+      const r = cfgRows[0];
+      pushCfg = { apvBtnLabel: r.apv_btn_label, rejBtnLabel: r.rej_btn_label, apvBtnAction: r.apv_btn_action, rejBtnAction: r.rej_btn_action };
+    }
+  } catch { /* 무시 */ }
+
   const makePayload = (row: SubRow, isSilent: boolean) => ({
     title: msgTitle, body: msgBody,
     url: `/APVMNG/APVMNG_01?requestId=${reqId}`,
     tag: `approval-${reqId}`,
     ...(isSilent ? { silent: true as const } : {}),
+    apvBtnLabel:  pushCfg.apvBtnLabel,
+    rejBtnLabel:  pushCfg.rejBtnLabel,
+    apvBtnAction: pushCfg.apvBtnAction,
+    rejBtnAction: pushCfg.rejBtnAction,
     approvalAction: { reqId, companyCode, corpCode: corp_code, empCode: row.emp_code, empName: '' },
   });
 
