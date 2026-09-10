@@ -123,6 +123,8 @@ function ApprovalInboxContent() {
     const requestId = searchParams.get('requestId');
     if (requestId && companyCode && empCode) {
       openDetail(Number(requestId));
+      // URL에서 requestId 제거 — 다시 방문해도 자동으로 열리지 않게
+      router.replace('/APVMNG/APVMNG_01', { scroll: false });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, companyCode, empCode]);
@@ -347,7 +349,7 @@ function ApprovalInboxContent() {
                   </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-4">
+                <div className="overflow-y-auto flex-1 min-h-0 px-5 py-4 flex flex-col gap-4">
                   {/* payload fields */}
                   <div className="flex flex-col gap-0 divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden">
                     {payloadToFields(detail.payload).map((f) => (
