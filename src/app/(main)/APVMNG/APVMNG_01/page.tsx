@@ -318,7 +318,7 @@ function ApprovalInboxContent() {
           onClick={() => { if (!actionLoading) setDetail(null); }}
         >
           <div
-            className="bg-white w-full max-w-sm rounded-2xl max-h-[85vh] overflow-y-auto shadow-xl"
+            className="bg-white w-full max-w-sm h-[82vh] rounded-2xl shadow-xl flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {detailLoading ? (
@@ -349,7 +349,7 @@ function ApprovalInboxContent() {
                   </button>
                 </div>
 
-                <div className="px-5 py-4 flex flex-col gap-4">
+                <div className="px-5 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto">
                   {/* payload fields */}
                   <div className="flex flex-col gap-0 divide-y divide-gray-100 rounded-xl border border-gray-100">
                     {payloadToFields(detail.payload).map((f, i, arr) => (
