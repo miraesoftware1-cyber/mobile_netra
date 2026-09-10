@@ -92,37 +92,7 @@ END
 GO
 
 -- ─── 2. 프로시저 ─────────────────────────────────────────────
-
--- 절차 설정 조회
-IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_process_get' AND xtype = 'P')
-    DROP PROCEDURE usp_mobile_apvmng_process_get
-GO
-CREATE PROCEDURE usp_mobile_apvmng_process_get
-    @MENU_ID    NVARCHAR(50)
-AS
-BEGIN
-    SET NOCOUNT ON
-
-    IF EXISTS (SELECT 1 FROM TB_MOBILE_APVMNG_PROCESS WHERE MENU_ID = @MENU_ID AND USE_YN = 'Y')
-    BEGIN
-        SELECT
-            '0'         AS Flag,
-            ''          AS MSG,
-            PROC_ID,
-            MENU_ID,
-            PROC_NAME,
-            CONFIG_JSON,
-            REG_DT,
-            UPD_DT
-        FROM TB_MOBILE_APVMNG_PROCESS
-        WHERE MENU_ID = @MENU_ID AND USE_YN = 'Y'
-    END
-    ELSE
-    BEGIN
-        SELECT '1' AS Flag, '설정된 절차가 없습니다.' AS MSG
-    END
-END
-GO
+-- ※ usp_mobile_apvmng_process_get 은 mybuilder-workflow.sql 에서 생성
 
 -- 승인 요청 생성
 -- param: MENU_ID, REQ_EMP_CODE, REQ_EMP_NAME, PAYLOAD_JSON, PROC_SNAPSHOT,
