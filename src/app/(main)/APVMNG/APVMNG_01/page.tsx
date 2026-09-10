@@ -445,12 +445,12 @@ function ApprovalInboxContent() {
 
                   {/* 코멘트 입력 */}
                   {canAct && (
-                    <textarea
+                    <input
+                      type="text"
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       placeholder="의견을 입력하세요 (선택)"
-                      rows={1}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 overflow-hidden"
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   )}
                 </div>
