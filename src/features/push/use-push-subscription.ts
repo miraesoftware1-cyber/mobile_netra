@@ -31,11 +31,12 @@ export function usePushSubscription() {
         const reg = await navigator.serviceWorker.register("/sw.js");
         await navigator.serviceWorker.ready;
 
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") return;
+        if (Notification.permission !== "granted") return;
 
-        // 기존 구독 해제 후 재구독 — VAPID 키 불일치 방지
+        // 세션 플래그 있어도 실제 구독이 없으면 재구독
         const existing = await reg.pushManager.getSubscription();
+        if (sessionStorage.getItem(flagKey) && existing) return;
+
         if (existing) await existing.unsubscribe();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
