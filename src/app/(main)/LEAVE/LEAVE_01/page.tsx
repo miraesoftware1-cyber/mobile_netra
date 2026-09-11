@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { ChevronLeft, TicketsPlane } from "lucide-react";
 import { LeaveRequestForm } from "@/features/leave/components/leave-request-form";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 export default function LeaveRequestPage() {
   const router = useRouter();
+  const pageTitle = useMenuTitle("LEAVE_01", "연차 신청");
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col overflow-y-auto bg-white">
@@ -16,7 +18,7 @@ export default function LeaveRequestPage() {
           </button>
           <div className="flex items-center gap-2">
             <TicketsPlane className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">연차 신청</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>

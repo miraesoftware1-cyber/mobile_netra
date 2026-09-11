@@ -2,11 +2,12 @@
 
 import { ChevronLeft, CalendarCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMenuStore } from "@/features/menu/use-menu-store";
+import { useMenuStore, useMenuTitle } from "@/features/menu/use-menu-store";
 import { LeaveApprovalList } from "@/features/leave/components/leave-approval-list";
 
 export default function LeaveApprovalPage() {
   const router = useRouter();
+  const pageTitle = useMenuTitle("LEAVE_02", "연차 승인");
   const perms = useMenuStore((s) => s.perms);
 
   const canApprove = perms["LEAVE_02"]?.approve ?? false;
@@ -22,7 +23,7 @@ export default function LeaveApprovalPage() {
           </button>
           <div className="flex items-center gap-2">
             <CalendarCheck className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">연차 승인</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>

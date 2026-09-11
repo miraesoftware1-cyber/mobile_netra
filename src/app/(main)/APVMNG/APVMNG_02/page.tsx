@@ -7,6 +7,7 @@ import {
   Search, Loader2, Check, X, Bell, AlertTriangle, Plus,
 } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -591,6 +592,7 @@ function StepDetailPanel({
 export default function ApprovalProcessPage() {
   const router     = useRouter();
   const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
+  const pageTitle   = useMenuTitle("APVMNG_02", "승인 절차 설정");
 
   const [selectedMenuId, setSelectedMenuId] = useState(APPROVAL_MENUS[0].id);
   const [menuOpen, setMenuOpen]             = useState(false);
@@ -742,7 +744,7 @@ export default function ApprovalProcessPage() {
           <button onClick={() => router.back()} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900 flex-1">승인 절차 설정</h1>
+          <h1 className="text-lg font-bold text-gray-900 flex-1">{pageTitle}</h1>
           <button
             onClick={handleSave}
             disabled={saving || loadingConfig}

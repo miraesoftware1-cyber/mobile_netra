@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { ChevronLeft, NotepadText } from "lucide-react";
 import { ExpenseInquiryView } from "@/features/expense/components/expense-inquiry-view";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 export default function ExpenseHistoryPage() {
   const router = useRouter();
+  const pageTitle = useMenuTitle("EXP_02", "지출결의 조회");
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-white">
@@ -16,7 +18,7 @@ export default function ExpenseHistoryPage() {
           </button>
           <div className="flex items-center gap-2">
             <NotepadText className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">지출결의 조회</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>

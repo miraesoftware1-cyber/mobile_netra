@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { ChevronLeft, NotepadText } from "lucide-react";
 import { LeaveInquiryView } from "@/features/leave/components/leave-inquiry-view";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 export default function LeaveHistoryPage() {
   const router = useRouter();
+  const pageTitle = useMenuTitle("LEAVE_03", "연차 조회");
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">
@@ -16,7 +18,7 @@ export default function LeaveHistoryPage() {
           </button>
           <div className="flex items-center gap-2">
             <NotepadText className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">연차 조회</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>

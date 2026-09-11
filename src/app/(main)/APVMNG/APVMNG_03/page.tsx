@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, AlertCircle, AlertTriangle, Users, User, Building2, Zap, Bell, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 const APPROVAL_MENUS = [
   { id: "LEAVE_01", name: "연차 신청" },
@@ -248,8 +249,9 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
 }
 
 export default function APVMNG03Page() {
-  const router = useRouter();
-  const user   = useAuthStore((s) => s.user);
+  const router    = useRouter();
+  const pageTitle = useMenuTitle("APVMNG_03", "승인 절차 현황");
+  const user      = useAuthStore((s) => s.user);
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [pushConfigs, setPushConfigs] = useState<Record<string, PushConfig>>({});
   const [loading, setLoading] = useState(true);
@@ -302,7 +304,7 @@ export default function APVMNG03Page() {
           >
             <ChevronLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="font-bold text-gray-900 text-base">승인 절차 현황</h1>
+          <h1 className="font-bold text-gray-900 text-base">{pageTitle}</h1>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, CheckCircle2, Clock, X, Check, XCircle, Loader2, RotateCcw } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 type ListItem = {
   REQ_ID: number;
@@ -89,6 +90,7 @@ function ApprovalInboxContent() {
   const empCode     = useAuthStore((s) => s.user?.emp_code ?? '');
   const empName     = useAuthStore((s) => s.user?.emp_name ?? '');
   const userId      = useAuthStore((s) => s.user?.user_id ?? '');
+  const pageTitle   = useMenuTitle("APVMNG_01", "승인 현황");
 
   const [tab, setTab] = useState<'pending' | 'completed'>('pending');
   const [pendingItems, setPendingItems] = useState<ListItem[]>([]);
@@ -190,7 +192,7 @@ function ApprovalInboxContent() {
           </button>
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">승인 현황</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>

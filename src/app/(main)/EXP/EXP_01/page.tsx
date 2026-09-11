@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Wallet } from "lucide-react";
 import { ExpenseResolutionForm } from "@/features/expense/components/expense-resolution-form";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 
 export default function ExpenseRequestPage() {
   const router = useRouter();
+  const pageTitle = useMenuTitle("EXP_01", "지출결의 등록");
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-white">
@@ -16,7 +18,7 @@ export default function ExpenseRequestPage() {
           </button>
           <div className="flex items-center gap-2">
             <Wallet className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">지출결의 등록</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>

@@ -4,11 +4,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, CalendarSearch } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+import { useMenuTitle } from "@/features/menu/use-menu-store";
 import { isDepartmentLeader } from "@/features/auth/lib/is-department-leader";
 import { DepartmentLeaveCalendarView } from "@/features/leave/components/department-leave-calendar-view";
 
 export default function LeaveDepartmentHistoryPage() {
   const router = useRouter();
+  const pageTitle = useMenuTitle("LEAVE_04", "연차/휴가 조회 (부서장)");
   const leaderFlag = useAuthStore((s) => s.user?.leader_flag);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function LeaveDepartmentHistoryPage() {
           </button>
           <div className="flex items-center gap-2">
             <CalendarSearch className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-bold text-gray-900">연차/휴가 조회 (부서장)</h1>
+            <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           </div>
         </div>
       </header>
