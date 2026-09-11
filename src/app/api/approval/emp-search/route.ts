@@ -18,14 +18,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '서버에 연결할 수 없습니다.' }, { status: 502 });
   }
 
-  // listType=group → 사용자 그룹 목록 SP, 아니면 직원 목록 SP
   let params: URLSearchParams;
   if (listType === 'group') {
-    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_list', param1: '' });
-  } else if (keyword.trim()) {
-    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_search', param1: keyword });
+    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_lookup', param1: '' });
   } else {
-    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_list', param1: '' });
+    params = new URLSearchParams({ proc: 'usp_mobile_apvmng_emp_lookup', param1: keyword.trim() });
   }
 
   const url = `${resolved.baseUrl}/R2JsonProc.asp?${params}`;

@@ -18,41 +18,41 @@ GO
 -- ─── 1. 워크플로우 단계 테이블 (신규) ────────────────────────
 
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_PROCESS_STEP' AND xtype = 'U')
-BEGIN
-    CREATE TABLE TB_MOBILE_APVMNG_PROCESS_STEP (
-        STEP_ID        INT                        NOT NULL,
-        PROC_ID        INT                        NOT NULL,
-        STEP_NO        INT                        NOT NULL,
-        STEP_TYPE      NVARCHAR(20)               NOT NULL,   -- individual / group / dept_head
-        APV_CODE       NVARCHAR(50)               NULL,
-        APV_NAME       NVARCHAR(100)              NULL,
-        THRESHOLD      INT                        NOT NULL DEFAULT 1,
-        PUSH_YN        CHAR(1)                    NOT NULL DEFAULT 'Y',
-        ALLOW_FINAL_YN CHAR(1)                    NOT NULL DEFAULT 'N',
-        MSG_TITLE      NVARCHAR(200)              NULL,
-        MSG_BODY       NVARCHAR(500)              NULL,
-        CONSTRAINT PK_APVMNG_PROCESS_STEP PRIMARY KEY (STEP_ID)
-    )
-END
+create table TB_MOBILE_APVMNG_PROCESS_STEP (
+    step_id          INT          not null,               -- 단계ID
+    proc_id          INT          not null,               -- 프로세스ID
+    step_no          INT          not null,               -- 단계번호
+    step_type        VARCHAR(20)  not null,               -- 단계유형 (individual/group/dept_head)
+    apv_code         VARCHAR(50)  null,                   -- 승인자코드
+    apv_name         VARCHAR(100) null,                   -- 승인자명
+    threshold        INT          default 1 not null,     -- 최소승인수
+    push_yn          CHAR(1)      default 'Y' not null,   -- 푸시알림
+    allow_final_yn   CHAR(1)      default 'N' not null,   -- 전결허용
+    msg_title        VARCHAR(200) null,                   -- 메시지제목
+    msg_body         VARCHAR(500) null,                   -- 메시지내용
+    creation_date    VARCHAR(14)  null,                   -- 최초입력일
+    created_by       VARCHAR(30)  null,                   -- 최초입력자
+    last_update_date VARCHAR(14)  null,                   -- 최종입력일
+    last_updated_by  VARCHAR(30)  null,                   -- 최종입력자
+    PRIMARY key(step_id)
+) ;
 GO
 
 -- ─── 2. 메뉴-워크플로우 연결 테이블 (신규) ───────────────────
 
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_MENU_MAP' AND xtype = 'U')
-BEGIN
-    CREATE TABLE TB_MOBILE_APVMNG_MENU_MAP (
-        MAP_ID    INT                        NOT NULL,
-        MENU_ID   NVARCHAR(50)              NOT NULL,   -- LEAVE_01 / EXP_01 등
-        MENU_NAME NVARCHAR(100)             NULL,       -- 연차 신청 / 지출 결의 등
-        PROC_ID   INT                       NOT NULL,
-        USE_YN    CHAR(1)                   NOT NULL DEFAULT 'Y',
-        CREATION_DATE    VARCHAR(14)        NULL,
-        CREATED_BY       VARCHAR(30)        NULL,
-        LAST_UPDATE_DATE VARCHAR(14)        NULL,
-        LAST_UPDATED_BY  VARCHAR(30)        NULL,
-        CONSTRAINT PK_APVMNG_MENU_MAP PRIMARY KEY (MAP_ID)
-    )
-END
+create table TB_MOBILE_APVMNG_MENU_MAP (
+    map_id           INT          not null,               -- 연결ID
+    menu_id          VARCHAR(50)  not null,               -- 메뉴ID
+    menu_name        VARCHAR(100) null,                   -- 메뉴명
+    proc_id          INT          not null,               -- 프로세스ID
+    use_yn           CHAR(1)      default 'Y' not null,   -- 사용여부
+    creation_date    VARCHAR(14)  null,                   -- 최초입력일
+    created_by       VARCHAR(30)  null,                   -- 최초입력자
+    last_update_date VARCHAR(14)  null,                   -- 최종입력일
+    last_updated_by  VARCHAR(30)  null,                   -- 최종입력자
+    PRIMARY key(map_id)
+) ;
 GO
 
 -- ─── 3. 앱 조회 SP 업데이트 ──────────────────────────────────
@@ -112,9 +112,9 @@ GO
 -- order by proc_id
 
 -- ON(INSERT)
--- insert into TB_MOBILE_APVMNG_PROCESS (proc_id, proc_name, config_json, use_yn, reg_dt)
+-- insert into TB_MOBILE_APVMNG_PROCESS (proc_id, proc_name, config_json, use_yn, creation_date, created_by)
 -- values (coalesce((select max(proc_id) from TB_MOBILE_APVMNG_PROCESS), 0) + 1,
---         :grd_mst.proc_name, '{}', :grd_mst.use_yn, getdate())
+--         :grd_mst.proc_name, '{}', :grd_mst.use_yn, dbo.SysDate(), 'admin')
 
 -- ON(UPDATE)
 -- update TB_MOBILE_APVMNG_PROCESS

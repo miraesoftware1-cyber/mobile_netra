@@ -45,6 +45,7 @@ const MENU_ID_ICON_MAP: Record<string, LucideIcon> = {
   // 승인 관리
   APVMNG_01: ClipboardList,
   APVMNG_02: Settings,
+  APVMNG_03: ClipboardList,
 };
 
 function menuItemIcon(menuId: string): LucideIcon {
@@ -131,20 +132,6 @@ export default function MenuPage() {
       });
   }, [companyCode, userId, userType]);
 
-  // 승인 관리는 ERP 권한 시스템과 무관하게 항상 표시 (mobile-native feature)
-  const STATIC_SECTIONS: Section[] = [
-    {
-      key: "APVMNG",
-      label: "승인 관리",
-      groupIcon: CheckCircle2,
-      items: [
-        { key: "APVMNG_01", title: "승인 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_01" },
-        { key: "APVMNG_02", title: "승인 절차 설정", icon: Settings, href: "/APVMNG/APVMNG_02" },
-        { key: "APVMNG_03", title: "승인 절차 현황", icon: ClipboardList, href: "/APVMNG/APVMNG_03" },
-      ],
-    },
-  ];
-
   const sections = useMemo((): Section[] => {
     if (!dbLoaded) return [];
 
@@ -159,9 +146,8 @@ export default function MenuPage() {
       return !perm || perm.view;
     };
 
-    // APVMNG는 STATIC_SECTIONS로 처리 → DB 목록에서 제외
-    const dbItems = storeItems.filter((m) => m.menu_id !== "APVMNG" && m.menu_pid !== "APVMNG" && !m.menu_id.startsWith("APVMNG"));
-    if (dbItems.length === 0) return [...STATIC_SECTIONS];
+    const dbItems = storeItems;
+    if (dbItems.length === 0) return [];
 
     const isParent = (m: MenuDBItem) => !m.menu_pid || m.menu_pid === "NULL";
     const hasParents = dbItems.some(isParent);
@@ -223,7 +209,7 @@ export default function MenuPage() {
         .filter((s) => s.items.length > 0);
     }
 
-    return [...dbSections, ...STATIC_SECTIONS];
+    return dbSections;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeItems, storePerms, dbLoaded]);
 

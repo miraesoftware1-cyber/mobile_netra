@@ -5,88 +5,77 @@
 
 -- ─── 1. 테이블 ───────────────────────────────────────────────
 
--- 승인 절차 설정 (메뉴별 프로세스 config)
+-- 승인 절차 설정
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_PROCESS' AND xtype = 'U')
-BEGIN
-    CREATE TABLE TB_MOBILE_APVMNG_PROCESS (
-        PROC_ID           INT                             NOT NULL,
-        PROC_NAME         NVARCHAR(100)                   NULL,
-        CONFIG_JSON       NVARCHAR(MAX)                   NOT NULL,
-        USE_YN            CHAR(1)                         NOT NULL   DEFAULT 'Y',
-        REG_DT            DATETIME                        NOT NULL   DEFAULT GETDATE(),
-        UPD_DT            DATETIME                        NULL,
-        CREATION_DATE     VARCHAR(14)                     NULL,
-        CREATED_BY        VARCHAR(30)                     NULL,
-        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
-        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
-        CONSTRAINT PK_APVMNG_PROCESS PRIMARY KEY (PROC_ID)
-    )
-END
+create table TB_MOBILE_APVMNG_PROCESS (
+    proc_id          INT          not null,               -- 프로세스ID
+    proc_name        VARCHAR(100) null,                   -- 프로세스명
+    config_json      VARCHAR(max) not null,               -- 설정JSON
+    use_yn           CHAR(1)      default 'Y' not null,   -- 사용여부
+    creation_date    VARCHAR(14)  null,                   -- 최초입력일
+    created_by       VARCHAR(30)  null,                   -- 최초입력자
+    last_update_date VARCHAR(14)  null,                   -- 최종입력일
+    last_updated_by  VARCHAR(30)  null,                   -- 최종입력자
+    PRIMARY key(proc_id)
+) ;
 GO
 
--- 승인 요청 (실제 승인 요청 건)
+-- 승인 요청
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_REQUEST' AND xtype = 'U')
-BEGIN
-    CREATE TABLE TB_MOBILE_APVMNG_REQUEST (
-        REQ_ID            INT                             NOT NULL,
-        MENU_ID           NVARCHAR(50)                    NOT NULL,
-        REQ_EMP_CODE      NVARCHAR(50)                    NOT NULL,
-        REQ_EMP_NAME      NVARCHAR(100)                   NULL,
-        PAYLOAD_JSON      NVARCHAR(MAX)                   NOT NULL,
-        PROC_SNAPSHOT     NVARCHAR(MAX)                   NOT NULL,
-        TOTAL_STEPS       INT                             NOT NULL   DEFAULT 1,
-        CURRENT_STEP      INT                             NOT NULL   DEFAULT 1,
-        STATUS            NVARCHAR(20)                    NOT NULL   DEFAULT 'PENDING',
-        -- STATUS: PENDING(대기) / APPROVED(승인완료) / REJECTED(반려)
-        REG_DT            DATETIME                        NOT NULL   DEFAULT GETDATE(),
-        UPD_DT            DATETIME                        NULL,
-        CREATION_DATE     VARCHAR(14)                     NULL,
-        CREATED_BY        VARCHAR(30)                     NULL,
-        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
-        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
-        CONSTRAINT PK_APVMNG_REQUEST PRIMARY KEY (REQ_ID)
-    )
-END
+create table TB_MOBILE_APVMNG_REQUEST (
+    req_id           INT          not null,                        -- 요청ID
+    menu_id          VARCHAR(50)  not null,                        -- 메뉴ID
+    req_emp_code     VARCHAR(50)  not null,                        -- 신청자코드
+    req_emp_name     VARCHAR(100) null,                            -- 신청자명
+    payload_json     VARCHAR(max) not null,                        -- 요청데이터
+    proc_snapshot    VARCHAR(max) not null,                        -- 절차스냅샷
+    total_steps      INT          default 1 not null,              -- 전체단계수
+    current_step     INT          default 1 not null,              -- 현재단계
+    status           VARCHAR(20)  not null,                        -- 상태 (PENDING/APPROVED/REJECTED)
+    reg_dt           DATETIME     default GETDATE() not null,      -- 등록일시
+    upd_dt           DATETIME     null,                            -- 수정일시
+    creation_date    VARCHAR(14)  null,                            -- 최초입력일
+    created_by       VARCHAR(30)  null,                            -- 최초입력자
+    last_update_date VARCHAR(14)  null,                            -- 최종입력일
+    last_updated_by  VARCHAR(30)  null,                            -- 최종입력자
+    PRIMARY key(req_id)
+) ;
 GO
 
--- 단계별 승인자 (JSON 파싱 불가 대비 정규화 테이블)
+-- 단계별 승인자
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_STEP_APV' AND xtype = 'U')
-BEGIN
-    CREATE TABLE TB_MOBILE_APVMNG_STEP_APV (
-        SA_ID             INT                             NOT NULL,
-        REQ_ID            INT                             NOT NULL,
-        STEP_NO           INT                             NOT NULL,
-        APV_TYPE          NVARCHAR(20)                    NOT NULL,  -- INDIVIDUAL / GROUP / DEPT_HEAD
-        EMP_CODE          NVARCHAR(50)                    NOT NULL,
-        THRESHOLD         INT                             NOT NULL   DEFAULT 1,
-        CREATION_DATE     VARCHAR(14)                     NULL,
-        CREATED_BY        VARCHAR(30)                     NULL,
-        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
-        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
-        CONSTRAINT PK_APVMNG_STEP_APV PRIMARY KEY (SA_ID)
-    )
-END
+create table TB_MOBILE_APVMNG_STEP_APV (
+    sa_id            INT         not null,                -- 승인자ID
+    req_id           INT         not null,                -- 요청ID
+    step_no          INT         not null,                -- 단계번호
+    apv_type         VARCHAR(20) not null,                -- 승인유형 (INDIVIDUAL/GROUP/DEPT_HEAD)
+    emp_code         VARCHAR(50) not null,                -- 사원코드
+    threshold        INT         default 1 not null,      -- 최소승인수
+    creation_date    VARCHAR(14) null,                    -- 최초입력일
+    created_by       VARCHAR(30) null,                    -- 최초입력자
+    last_update_date VARCHAR(14) null,                    -- 최종입력일
+    last_updated_by  VARCHAR(30) null,                    -- 최종입력자
+    PRIMARY key(sa_id)
+) ;
 GO
 
 -- 승인 처리 이력
 IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name = 'TB_MOBILE_APVMNG_ACTION' AND xtype = 'U')
-BEGIN
-    CREATE TABLE TB_MOBILE_APVMNG_ACTION (
-        ACT_ID            INT                             NOT NULL,
-        REQ_ID            INT                             NOT NULL,
-        STEP_NO           INT                             NOT NULL,
-        APV_CODE          NVARCHAR(50)                    NOT NULL,
-        APV_NAME          NVARCHAR(100)                   NULL,
-        ACTION            NVARCHAR(20)                    NOT NULL,  -- APPROVE / REJECT
-        COMMENT           NVARCHAR(500)                   NULL,
-        ACT_DT            DATETIME                        NOT NULL   DEFAULT GETDATE(),
-        CREATION_DATE     VARCHAR(14)                     NULL,
-        CREATED_BY        VARCHAR(30)                     NULL,
-        LAST_UPDATE_DATE  VARCHAR(14)                     NULL,
-        LAST_UPDATED_BY   VARCHAR(30)                     NULL,
-        CONSTRAINT PK_APVMNG_ACTION PRIMARY KEY (ACT_ID)
-    )
-END
+create table TB_MOBILE_APVMNG_ACTION (
+    act_id           INT          not null,               -- 처리ID
+    req_id           INT          not null,               -- 요청ID
+    step_no          INT          not null,               -- 단계번호
+    apv_code         VARCHAR(50)  not null,               -- 승인자코드
+    apv_name         VARCHAR(100) null,                   -- 승인자명
+    action           VARCHAR(20)  not null,               -- 처리구분 (APPROVE/REJECT)
+    comment          VARCHAR(500) null,                   -- 코멘트
+    act_dt           DATETIME     default GETDATE() not null,  -- 처리일시
+    creation_date    VARCHAR(14)  null,                   -- 최초입력일
+    created_by       VARCHAR(30)  null,                   -- 최초입력자
+    last_update_date VARCHAR(14)  null,                   -- 최종입력일
+    last_updated_by  VARCHAR(30)  null,                   -- 최종입력자
+    PRIMARY key(act_id)
+) ;
 GO
 
 -- ─── 2. 프로시저 ─────────────────────────────────────────────

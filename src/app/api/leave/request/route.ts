@@ -170,13 +170,22 @@ async function prepareApproval(args: {
   const steps = [...stepMap.values()].sort((a, b) => a.stepNo - b.stepNo);
   if (!steps.length) return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
 
-  // 2. INDIVIDUAL/DEPT_HEAD 승인자 즉시 resolve (그룹은 after()에서 처리)
+  // 2. 모든 승인자 resolve (그룹도 여기서 처리)
   const stepApprovers: StepApprover[] = [];
   for (const step of steps) {
     if (step.type === 'group') {
-      // group: APV_CODE = USER_GROUP명 (_신입사원 등), after()에서 ENV_USER 조회
       if (step.apvCode) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: step.apvCode, userId: step.apvCode, threshold: step.threshold });
+        const p = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_lookup', param1: step.apvCode });
+        const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
+        const d = await r?.json().catch(() => null);
+        const members: Array<{ EMP_CODE: string }> = d?.items ?? [];
+        if (members.length === 0) {
+          stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: step.apvCode, userId: step.apvCode, threshold: step.threshold });
+        } else {
+          for (const m of members) {
+            stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: m.EMP_CODE, userId: m.EMP_CODE, threshold: step.threshold });
+          }
+        }
       }
     } else if (step.type === 'dept_head') {
       // 부서장은 PG에서 즉시 조회 (빠름)
@@ -212,6 +221,18 @@ async function prepareApproval(args: {
   const reqId: number = Number(createData?.items?.[0]?.REQ_ID ?? 0);
   console.log('[approval] request_create Flag:', createData?.Flag, 'REQ_ID:', reqId);
   if (!reqId || String(createData?.Flag) !== '0') return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
+
+  // 단계별 승인자 등록 (그룹 resolve 완료된 상태)
+  await Promise.allSettled(
+    stepApprovers.map((apv) => {
+      const p = new URLSearchParams({
+        proc: 'usp_mobile_apvmng_step_apv_add',
+        param1: String(reqId), param2: String(apv.stepNo),
+        param3: apv.apvType, param4: apv.empCode, param5: String(apv.threshold),
+      });
+      return fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
+    }),
+  );
 
   // 4. req_id → PG 저장 (취소 시 필요)
   if (!_reqsTableEnsured) {
@@ -264,39 +285,8 @@ async function sendNotifications(setup: ApprovalSetup) {
 
   const varArgs = { emp_name, emp_code, leaveTypeName, leaveTypeCode, startDate, endDate, usedDays, dpt_code };
 
-  // 그룹 멤버 실제 resolve (ERP 호출) - 그룹들 병렬 조회
-  const groupApvs = stepApprovers.filter((a) => a.apvType === 'GROUP');
-  const nonGroupApvs = stepApprovers.filter((a) => a.apvType !== 'GROUP');
-
-  const groupResults = await Promise.all(
-    groupApvs.map(async (apv) => {
-      const p = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_members', param1: apv.empCode });
-      const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
-      const d = await r?.json().catch(() => null);
-      const members: Array<{ EMP_CODE: string }> = d?.items ?? [];
-      return members.length === 0
-        ? [apv]
-        : members.map((m) => ({ ...apv, empCode: m.EMP_CODE, userId: m.EMP_CODE }));
-    }),
-  );
-  const resolvedApprovers: StepApprover[] = [...nonGroupApvs, ...groupResults.flat()];
-
-  // 단계별 승인자 ERP 등록 - 병렬 호출
-  await Promise.allSettled(
-    resolvedApprovers.map(async (apv) => {
-      const p = new URLSearchParams({
-        proc: 'usp_mobile_apvmng_step_apv_add',
-        param1: String(reqId), param2: String(apv.stepNo),
-        param3: apv.apvType, param4: apv.empCode, param5: String(apv.threshold),
-      });
-      const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
-      const d = await r?.json().catch(() => null);
-      console.log('[approval] step_apv_add', apv.empCode, 'Flag:', d?.Flag);
-    }),
-  );
-
-  // 1단계 승인자 구독 조회 + 푸시
-  const step1Approvers = resolvedApprovers.filter((a) => a.stepNo === 1);
+  // 1단계 승인자 구독 조회 + 푸시 (stepApprovers는 prepareApproval에서 이미 resolve 완료)
+  const step1Approvers = stepApprovers.filter((a) => a.stepNo === 1);
   const groupIds    = step1Approvers.filter((a) => a.userId).map((a) => a.userId as string);
   const deptCodes   = step1Approvers.filter((a) => !a.userId).map((a) => a.empCode);
 
