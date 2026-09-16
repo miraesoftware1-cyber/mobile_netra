@@ -134,10 +134,10 @@ function SchDatePickerField({
       <PopoverTrigger asChild>
         <Button
           type="button" variant="outline"
-          className={cn("h-11 w-full justify-start border-gray-200 bg-gray-50 text-sm font-normal overflow-hidden", !value && "text-gray-400")}
+          className={cn("h-11 w-full justify-start pl-2 border-gray-200 bg-gray-50 font-normal overflow-hidden", !value && "text-gray-400")}
         >
-          <CalendarDays className="mr-1 h-4 w-4 shrink-0 text-gray-400" />
-          <span className="truncate min-w-0">
+          <CalendarDays className="mr-1 h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <span style={{ fontSize: "12px" }}>
             {value?.length === 8 ? `${value.slice(0,4)}.${value.slice(4,6)}.${value.slice(6,8)}` : placeholder}
           </span>
         </Button>
