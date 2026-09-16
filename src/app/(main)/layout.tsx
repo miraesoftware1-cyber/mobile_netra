@@ -66,7 +66,7 @@ export default function MainLayout({
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col bg-white">
-      <main className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))] bg-white">
+      <main className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden pb-16 bg-white">
         {children}
       </main>
       <BottomTabNav />
