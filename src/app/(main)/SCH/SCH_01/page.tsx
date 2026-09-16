@@ -44,14 +44,16 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
   const period = parsed?.period ?? null;
   const hour   = parsed?.hour   ?? (period === "pm" ? 12 : 0);
   const hours  = period === "pm" ? PM_HOURS : AM_HOURS;
+  const [open, setOpen] = useState(false);
 
   function setPeriod(p: "am" | "pm") {
-    if (period === p) { onChange(""); return; } // 같은 버튼 재클릭 → 해제
+    if (period === p) { onChange(""); setOpen(false); return; }
     const defaultHour = p === "pm" ? 12 : 0;
     onChange(buildTimeStr(p, defaultHour));
   }
-  function setHour(h: number) {
+  function selectHour(h: number) {
     onChange(buildTimeStr(period ?? "am", h));
+    setOpen(false);
   }
 
   return (
@@ -74,18 +76,37 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
       {period && (
         <>
           <div className="w-px h-5 bg-gray-200 shrink-0" />
-          <select
-            value={hour}
-            onChange={(e) => setHour(Number(e.target.value))}
-            className="flex-1 min-w-0 w-0 bg-transparent text-sm text-gray-900 outline-none"
-          >
-            {hours.map((h) => (
-              <option key={h} value={h}>{String(h).padStart(2, "0")}시</option>
-            ))}
-          </select>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                style={{ fontSize: "13px" }}
+                className="flex-1 min-w-0 h-9 bg-transparent text-gray-900 text-left px-1 outline-none"
+              >
+                {String(hour).padStart(2, "0")}시
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="z-[300] w-44 p-2" align="start">
+              <div className="grid grid-cols-3 gap-1">
+                {hours.map((h) => (
+                  <button
+                    key={h} type="button"
+                    onClick={() => selectHour(h)}
+                    style={{ fontSize: "13px" }}
+                    className={cn(
+                      "py-2 rounded-lg text-center font-medium transition-colors",
+                      h === hour ? "bg-primary text-white" : "text-gray-700 active:bg-gray-100",
+                    )}
+                  >
+                    {String(h).padStart(2, "0")}시
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <button
             type="button"
-            onClick={() => onChange("")}
+            onClick={() => { onChange(""); setOpen(false); }}
             className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 shrink-0"
           >
             <X className="w-3 h-3" />
@@ -137,7 +158,7 @@ function SchDatePickerField({
           className={cn("h-11 w-full justify-start pl-2 border-gray-200 bg-gray-50 font-normal overflow-hidden", !value && "text-gray-400")}
         >
           <CalendarDays className="mr-1 h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span style={{ fontSize: "12px" }}>
+          <span style={{ fontSize: "13px" }}>
             {value?.length === 8 ? `${value.slice(0,4)}.${value.slice(4,6)}.${value.slice(6,8)}` : placeholder}
           </span>
         </Button>
