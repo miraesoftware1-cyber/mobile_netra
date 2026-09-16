@@ -65,7 +65,7 @@ export default function MainLayout({
   }, [companyCode, userId, userType, setItems, setPerms]);
 
   return (
-    <div className="flex h-0 min-h-0 flex-1 flex-col bg-gray-50">
+    <div className="flex h-0 min-h-0 flex-1 flex-col bg-white">
       <main className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))] bg-white">
         {children}
       </main>
