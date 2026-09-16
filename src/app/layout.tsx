@@ -48,7 +48,16 @@ export default function RootLayout({
   return (
     <html suppressHydrationWarning>
       <body className={`${geistSans.variable} antialiased`}>
-        <div className="mx-auto flex h-dvh max-h-dvh min-h-0 max-w-[430px] flex-col overflow-hidden box-border bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]">
+        {/* iOS PWA 뷰포트 높이 고정: dvh 불안정 문제 해결 */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){
+            function setH(){document.documentElement.style.setProperty('--app-h',window.innerHeight+'px');}
+            setH();
+            window.addEventListener('resize',setH);
+            document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setH();});
+          })();
+        `}} />
+        <div className="mx-auto flex min-h-0 max-w-[430px] flex-col overflow-hidden box-border bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]" style={{height:'var(--app-h,100dvh)',maxHeight:'var(--app-h,100dvh)'}}>
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <Providers>
               <FontSizeProvider />
