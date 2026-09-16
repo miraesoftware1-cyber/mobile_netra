@@ -55,7 +55,7 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
   }
 
   return (
-    <div className="h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center px-1 gap-1 min-w-0 overflow-hidden">
+    <div className="min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 flex items-center px-1 py-1 gap-1 min-w-0 overflow-hidden">
       <div className="flex rounded-lg overflow-hidden shrink-0">
         {(["am", "pm"] as const).map((p) => (
           <button
@@ -63,7 +63,7 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
             onClick={() => setPeriod(p)}
             style={{ fontSize: "11px" }}
             className={cn(
-              "px-1.5 py-1.5 font-semibold transition-colors rounded-lg leading-none",
+              "px-1.5 py-1 font-semibold transition-colors rounded-lg leading-none",
               period === p ? "bg-primary text-white" : "text-gray-400 hover:text-gray-600",
             )}
           >
@@ -77,7 +77,7 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
           <select
             value={hour}
             onChange={(e) => setHour(Number(e.target.value))}
-            className="flex-1 min-w-0 w-0 h-9 bg-transparent text-sm text-gray-900 outline-none"
+            className="flex-1 min-w-0 w-0 bg-transparent text-sm text-gray-900 outline-none"
           >
             {hours.map((h) => (
               <option key={h} value={h}>{String(h).padStart(2, "0")}시</option>
@@ -134,10 +134,12 @@ function SchDatePickerField({
       <PopoverTrigger asChild>
         <Button
           type="button" variant="outline"
-          className={cn("h-11 w-full justify-start border-gray-200 bg-gray-50 text-sm font-normal", !value && "text-gray-400")}
+          className={cn("h-11 w-full justify-start border-gray-200 bg-gray-50 text-sm font-normal overflow-hidden", !value && "text-gray-400")}
         >
-          <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-gray-400" />
-          {value?.length === 8 ? `${value.slice(0,4)}.${value.slice(4,6)}.${value.slice(6,8)}` : placeholder}
+          <CalendarDays className="mr-1 h-4 w-4 shrink-0 text-gray-400" />
+          <span className="truncate min-w-0">
+            {value?.length === 8 ? `${value.slice(0,4)}.${value.slice(4,6)}.${value.slice(6,8)}` : placeholder}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="z-[300] w-auto p-0" align="start">
