@@ -55,14 +55,15 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
   }
 
   return (
-    <div className="h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center px-1 gap-1 min-w-0">
+    <div className="h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center px-1 gap-1 min-w-0 overflow-hidden">
       <div className="flex rounded-lg overflow-hidden shrink-0">
         {(["am", "pm"] as const).map((p) => (
           <button
             key={p} type="button"
             onClick={() => setPeriod(p)}
+            style={{ fontSize: "11px" }}
             className={cn(
-              "px-2 py-1.5 text-xs font-semibold transition-colors rounded-lg",
+              "px-1.5 py-1.5 font-semibold transition-colors rounded-lg leading-none",
               period === p ? "bg-primary text-white" : "text-gray-400 hover:text-gray-600",
             )}
           >
@@ -76,7 +77,7 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
           <select
             value={hour}
             onChange={(e) => setHour(Number(e.target.value))}
-            className="flex-1 min-w-0 h-9 bg-transparent text-sm text-gray-900 outline-none"
+            className="flex-1 min-w-0 w-0 h-9 bg-transparent text-sm text-gray-900 outline-none"
           >
             {hours.map((h) => (
               <option key={h} value={h}>{String(h).padStart(2, "0")}시</option>
