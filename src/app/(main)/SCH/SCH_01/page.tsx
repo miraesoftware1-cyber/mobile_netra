@@ -57,7 +57,7 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
   }
 
   return (
-    <div className="min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 flex items-center px-1 py-1 gap-1 min-w-0 overflow-hidden">
+    <div className="relative min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 flex items-center px-1 py-1 gap-1 min-w-0 overflow-visible">
       <div className="flex rounded-lg overflow-hidden shrink-0">
         {(["am", "pm"] as const).map((p) => (
           <button
@@ -76,34 +76,14 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
       {period && (
         <>
           <div className="w-px h-5 bg-gray-200 shrink-0" />
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                style={{ fontSize: "13px" }}
-                className="flex-1 min-w-0 h-9 bg-transparent text-gray-900 text-left px-1 outline-none"
-              >
-                {String(hour).padStart(2, "0")}시
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="z-[300] w-44 p-2" align="start">
-              <div className="grid grid-cols-3 gap-1">
-                {hours.map((h) => (
-                  <button
-                    key={h} type="button"
-                    onClick={() => selectHour(h)}
-                    style={{ fontSize: "13px" }}
-                    className={cn(
-                      "py-2 rounded-lg text-center font-medium transition-colors",
-                      h === hour ? "bg-primary text-white" : "text-gray-700 active:bg-gray-100",
-                    )}
-                  >
-                    {String(h).padStart(2, "0")}시
-                  </button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            style={{ fontSize: "13px" }}
+            className="flex-1 min-w-0 h-9 bg-transparent text-gray-900 text-left px-1 outline-none"
+          >
+            {String(hour).padStart(2, "0")}시
+          </button>
           <button
             type="button"
             onClick={() => { onChange(""); setOpen(false); }}
@@ -112,6 +92,25 @@ function HourPicker({ value, onChange }: { value: string; onChange: (v: string) 
             <X className="w-3 h-3" />
           </button>
         </>
+      )}
+      {open && period && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-[300] bg-white border border-gray-200 rounded-xl shadow-lg p-1 max-h-48 overflow-y-auto">
+          <div className="flex flex-col">
+            {hours.map((h) => (
+              <button
+                key={h} type="button"
+                onClick={() => selectHour(h)}
+                style={{ fontSize: "13px" }}
+                className={cn(
+                  "py-2 px-3 rounded-lg text-left font-medium transition-colors",
+                  h === hour ? "bg-primary text-white" : "text-gray-700 active:bg-gray-100",
+                )}
+              >
+                {String(h).padStart(2, "0")}시
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
