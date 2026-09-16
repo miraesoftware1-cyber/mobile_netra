@@ -54,7 +54,6 @@ export default function RootLayout({
             function setH(){document.documentElement.style.setProperty('--app-h',window.innerHeight+'px');}
             setH();
             window.addEventListener('resize',setH);
-            document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setH();});
           })();
         `}} />
         <div className="mx-auto flex min-h-0 max-w-[430px] flex-col overflow-hidden box-border bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]" style={{height:'var(--app-h,100dvh)',maxHeight:'var(--app-h,100dvh)'}}>
