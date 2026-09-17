@@ -224,4 +224,81 @@ BEGIN
 END
 GO
 
+-- ─── 9. 조직도 계층 승인자 조회 (새 워크플로우용) ─────────────
+-- 신청자 기준으로 팀장→부서장→본부장→대표 순서로 승인자 조회
+-- param1: CORP_CODE, param2: DPT_CODE, param3: EMP_CODE (신청자, 팀장 제외용)
+
+IF EXISTS (SELECT 1 FROM sysobjects WHERE name = 'usp_mobile_apvmng_get_hierarchy' AND xtype = 'P')
+    DROP PROCEDURE usp_mobile_apvmng_get_hierarchy
+GO
+CREATE PROCEDURE usp_mobile_apvmng_get_hierarchy
+    @CORP_CODE NVARCHAR(50),
+    @DPT_CODE  NVARCHAR(50),
+    @EMP_CODE  NVARCHAR(50)   -- 신청자 (팀장 조회 시 본인 제외)
+AS
+BEGIN
+    SET NOCOUNT ON
+
+    -- 팀장: 같은 부서, team_yn = 'Y', 신청자 본인 제외, 재직 중
+    SELECT
+        'team_leader'   AS STEP_TYPE,
+        e.EMP_CODE,
+        e.EMP_NAME
+    FROM mst_emp e WITH(NOLOCK)
+    WHERE e.corp_code = @CORP_CODE
+      AND e.dpt_code  = @DPT_CODE
+      AND e.team_yn   = 'Y'
+      AND e.emp_code  <> @EMP_CODE
+      AND ISNULL(e.ter_date, '') = ''
+
+    UNION ALL
+
+    -- 부서장: 해당 부서의 dpt_leader
+    SELECT
+        'dept_head'     AS STEP_TYPE,
+        e.EMP_CODE,
+        e.EMP_NAME
+    FROM mst_dpt d WITH(NOLOCK)
+    INNER JOIN mst_emp e WITH(NOLOCK)
+        ON  e.emp_code  = d.dpt_leader
+        AND e.corp_code = d.corp_code
+        AND ISNULL(e.ter_date, '') = ''
+    WHERE d.corp_code = @CORP_CODE
+      AND d.dpt_code  = @DPT_CODE
+      AND ISNULL(d.dpt_leader, '') <> ''
+
+    UNION ALL
+
+    -- 본부장: 상위 부서(dpt_pcode)의 dpt_leader
+    SELECT
+        'div_head'      AS STEP_TYPE,
+        e.EMP_CODE,
+        e.EMP_NAME
+    FROM mst_dpt d1 WITH(NOLOCK)
+    INNER JOIN mst_dpt d2 WITH(NOLOCK)
+        ON  d2.corp_code = d1.corp_code
+        AND d2.dpt_code  = d1.dpt_pcode
+    INNER JOIN mst_emp e WITH(NOLOCK)
+        ON  e.emp_code  = d2.dpt_leader
+        AND e.corp_code = d2.corp_code
+        AND ISNULL(e.ter_date, '') = ''
+    WHERE d1.corp_code = @CORP_CODE
+      AND d1.dpt_code  = @DPT_CODE
+      AND ISNULL(d1.dpt_pcode,   '') <> ''
+      AND ISNULL(d2.dpt_leader,  '') <> ''
+
+    UNION ALL
+
+    -- 대표: emp_class = '10', 재직 중
+    SELECT
+        'ceo'           AS STEP_TYPE,
+        e.EMP_CODE,
+        e.EMP_NAME
+    FROM mst_emp e WITH(NOLOCK)
+    WHERE e.corp_code = @CORP_CODE
+      AND e.emp_class = '10'
+      AND ISNULL(e.ter_date, '') = ''
+END
+GO
+
 -- ─── 끝 ──────────────────────────────────────────────────────

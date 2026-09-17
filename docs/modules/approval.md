@@ -3,8 +3,8 @@
 ## 개요
 
 메뉴별 다단계 승인 절차를 설정하고 처리하는 모바일 네이티브 기능입니다.  
-ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴입니다.  
-신청 → 1단계 승인자 푸시 → 승인 → 다음 단계 푸시 → 최종 완료 시 신청자 푸시까지 자동으로 처리합니다.
+메뉴 표시 및 페이지 제목은 ERP DB(`usp_mobile_get_env_mobile_menu`) 기반으로 동작합니다.  
+신청 → 1단계 승인자 푸시 → 승인 → 다음 단계 푸시 → 최종 완료 시 신청자 푸시까지 자동 처리합니다.
 
 ## 페이지
 
@@ -19,57 +19,66 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
 | 파일 | 역할 |
 |------|------|
 | `src/app/(main)/APVMNG/APVMNG_01/page.tsx` | 승인 대기/완료 목록 및 승인 처리 |
-| `src/app/(main)/APVMNG/APVMNG_02/page.tsx` | 메뉴별 승인 절차 설정 |
+| `src/app/(main)/APVMNG/APVMNG_02/page.tsx` | 메뉴별 승인 절차 설정 (MyBuilder 관리) |
 | `src/app/(main)/APVMNG/APVMNG_03/page.tsx` | 설정된 프로세스 타임라인 조회 (읽기 전용) |
-| `src/app/(main)/menu/page.tsx` | STATIC_SECTIONS로 APVMNG 항상 노출 |
+| `src/app/(main)/menu/page.tsx` | ERP DB 기반 메뉴 목록 (use_yn·권한 연동) |
+| `docs/sql/approval-process.sql` | 승인 관련 테이블 4개 + 앱용 SP (최초 설치) |
+| `docs/sql/mybuilder-workflow.sql` | PROCESS_STEP·MENU_MAP 테이블 + MyBuilder CRUD 쿼리 |
+| `docs/sql/approval-sp-alter.sql` | ERP 등록용 ALTER PROCEDURE 11개 |
 
 ## API 라우트
 
 | 경로 | 메서드 | 설명 |
 |------|--------|------|
 | `/api/approval/process` | GET | 메뉴별 절차 설정 조회 |
-| `/api/approval/process` | POST | 메뉴별 절차 설정 저장 |
 | `/api/approval/list` | GET | 내 승인 대기/완료 목록 |
 | `/api/approval/detail` | GET | 승인 요청 상세 + 현재 단계 승인자 목록 |
 | `/api/approval/action` | POST | 승인/반려 처리 + 자동 푸시 |
-| `/api/approval/emp-search` | GET | 승인자 검색 (직원·그룹) |
+| `/api/approval/emp-search` | GET | 승인자 검색 (직원·그룹, `listType=emp\|group`) |
 | `/api/push/erp-notify` | POST | ERP(MyBuilder sp_OACreate)에서 직접 푸시 트리거용 |
 
 ## ERP 테이블 (MSSQL)
 
-`docs/sql/approval-process.sql` 실행 시 생성됩니다. SQL Server 2008 이상 호환.
+`docs/sql/approval-process.sql` + `docs/sql/mybuilder-workflow.sql` 실행 시 생성됩니다.  
+SQL Server 2008 이상 호환. IDENTITY·FK·UNIQUE 없음 (ERP 배포 규칙).
+
+### 앱 운영 테이블
 
 | 테이블 | 설명 |
 |--------|------|
-| `TB_MOBILE_APVMNG_PROCESS` | 메뉴별 절차 설정 (CONFIG_JSON: 단계·승인자·메시지 포함) |
 | `TB_MOBILE_APVMNG_REQUEST` | 승인 요청 건 (STATUS: PENDING / APPROVED / REJECTED) |
 | `TB_MOBILE_APVMNG_STEP_APV` | 요청별 단계별 승인자 목록 (APV_TYPE: INDIVIDUAL / GROUP / DEPT_HEAD) |
-| `TB_MOBILE_APVMNG_ACTION` | 승인/반려 처리 이력 — **R2JsonProc.asp INSERT 불가로 현재 미사용**, PG로 대체 |
+| `TB_MOBILE_APVMNG_ACTION` | 승인/반려 처리 이력 — R2JsonProc.asp INSERT 불가로 **현재 미사용**, PG로 대체 |
+
+### MyBuilder 관리 테이블
+
+| 테이블 | 설명 |
+|--------|------|
+| `TB_MOBILE_APVMNG_PROCESS` | 워크플로우 정의 (PROC_NAME, CONFIG_JSON, USE_YN) |
+| `TB_MOBILE_APVMNG_PROCESS_STEP` | 워크플로우 단계 템플릿 (단계별 승인자·타입·메시지) |
+| `TB_MOBILE_APVMNG_MENU_MAP` | 메뉴 ↔ 워크플로우 연결 (MENU_ID, PROC_ID, USE_YN) |
 
 ## ERP 프로시저 목록
 
-`docs/sql/approval-process.sql`에 전부 포함됩니다.
+`docs/sql/approval-sp-alter.sql`에 ALTER PROCEDURE 형식으로 전부 포함됩니다.  
+SQL Server 2008 이상 호환 (OPENJSON 미사용).
 
-| 프로시저 | 읽기/쓰기 | R2JsonProc 파라미터 | 설명 |
-|----------|-----------|---------------------|------|
-| `usp_mobile_apvmng_process_get` | SELECT | param1=MENU_ID | 절차 설정 조회 (CONFIG_JSON 반환) |
-| `usp_mobile_apvmng_process_save` | INSERT/UPDATE | param1=MENU_ID, param2=PROC_NAME, param3=CONFIG_JSON | 절차 설정 저장 |
-| `usp_mobile_apvmng_request_create` | INSERT | param1=MENU_ID, param2=EMP_CODE, param3=EMP_NAME, param4=PAYLOAD_JSON, param5=PROC_SNAPSHOT, param6=TOTAL_STEPS | 승인 요청 생성 → REQ_ID 반환 |
-| `usp_mobile_apvmng_step_apv_add` | INSERT | param1=REQ_ID, param2=STEP_NO, param3=APV_TYPE, param4=EMP_CODE, param5=THRESHOLD | 단계별 승인자 등록 |
-| `usp_mobile_apvmng_request_list` | SELECT | param1=EMP_CODE, param2=STATUS | 내가 처리해야 할 목록 조회 |
-| `usp_mobile_apvmng_request_detail` | SELECT | param1=REQ_ID | 요청 상세 + 처리 이력 |
-| `usp_mobile_apvmng_step_approvers` | SELECT | param1=REQ_ID, param2=STEP_NO | 특정 단계 승인자 목록 (푸시용) |
-| `usp_mobile_apvmng_step_state` | SELECT | param1=REQ_ID, param2=USER_ID | 현재 단계 상태·THRESHOLD 조회 (승인 처리 전 검증) |
-| `usp_mobile_apvmng_set_step` | UPDATE | param1=REQ_ID, param2=STATUS, param3=STEP_NO | 요청 STATUS / CURRENT_STEP 갱신 |
-| `usp_mobile_apvmng_req_info` | SELECT | param1=REQ_ID | 요청자 코드·이름·메뉴 ID 조회 (알림용) |
-| `usp_mobile_apvmng_emp_list` | SELECT | param1='' (더미) | 직원 전체 목록 (TOP 1000, ter_date 없는 재직자) |
-| `usp_mobile_apvmng_emp_search` | SELECT | param1=KEYWORD | 직원 검색 (이름·사번, TOP 50) |
-| `usp_mobile_apvmng_group_list` | SELECT | param1='' (더미) | 사용자 그룹 목록 (ENV_USER WHERE USER_TYPE='G') |
-| `usp_mobile_apvmng_group_members` | SELECT | param1=GROUP_CODE | 그룹 멤버 조회 (ENV_USER WHERE USER_GROUP=GROUP_CODE) |
-| `usp_mobile_apvmng_action` | INSERT/UPDATE | — | 승인 처리 통합 SP (R2JsonProc.asp INSERT 불가로 **미사용**) |
+| 프로시저 | R2JsonProc 파라미터 | 설명 |
+|----------|---------------------|------|
+| `usp_mobile_apvmng_process_get` | param1=MENU_ID | MENU_MAP → PROCESS_STEP 조회 (앱에서 워크플로우 단계 확인) |
+| `usp_mobile_apvmng_request_create` | param1=MENU_ID, param2=EMP_CODE, param3=EMP_NAME, param4=PAYLOAD_JSON, param5=PROC_SNAPSHOT, param6=TOTAL_STEPS | 승인 요청 생성 → REQ_ID 반환 |
+| `usp_mobile_apvmng_step_apv_add` | param1=REQ_ID, param2=STEP_NO, param3=APV_TYPE, param4=EMP_CODE, param5=THRESHOLD | 단계별 승인자 1건 등록 (요청 생성 후 반복 호출) |
+| `usp_mobile_apvmng_request_list` | param1=EMP_CODE, param2=STATUS | 내가 처리해야 할 목록 조회 |
+| `usp_mobile_apvmng_request_detail` | param1=REQ_ID | 요청 상세 + 처리 이력 (2개 resultset) |
+| `usp_mobile_apvmng_step_approvers` | param1=REQ_ID, param2=STEP_NO | 특정 단계 승인자 목록 (푸시용) |
+| `usp_mobile_apvmng_req_info` | param1=REQ_ID | 요청자 코드·이름·메뉴ID 조회 (알림용) |
+| `usp_mobile_apvmng_step_state` | param1=REQ_ID, param2=USER_ID | 현재 단계 상태·THRESHOLD 조회 (승인 처리 전 검증) |
+| `usp_mobile_apvmng_set_step` | param1=REQ_ID, param2=STATUS, param3=STEP_NO | 요청 STATUS / CURRENT_STEP 갱신 |
+| `usp_mobile_apvmng_emp_lookup` | param1=KEYWORD | 직원 조회: KEYWORD 없으면 전체(TOP 1000), 있으면 검색(TOP 50) |
+| `usp_mobile_apvmng_group_lookup` | param1=TARGET | 그룹 조회: TARGET 없으면 그룹 목록, 있으면 해당 그룹 멤버 |
 
 > **R2JsonProc.asp INSERT 제한**: `TB_MOBILE_APVMNG_ACTION`에 대한 INSERT는 ASP 레벨에서 HTTP 500을 반환합니다.  
-> 이 때문에 액션 기록은 PostgreSQL `netra_apvmng_actions`에 저장하고, ERP에는 `usp_mobile_apvmng_set_step`(UPDATE)만 씁니다.
+> 액션 기록은 PostgreSQL `netra_apvmng_actions`에 저장하고, ERP에는 `usp_mobile_apvmng_set_step`(UPDATE)만 씁니다.
 
 ## PostgreSQL 테이블
 
@@ -87,10 +96,11 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
   └─ usp_mobile_apvmng_process_get 조회        ─┘
        ├─ 절차 없음: 부서장(manage_dpt_codes)에게 직접 푸시
        └─ 절차 있음:
+             ├─ 그룹 타입 승인자 → usp_mobile_apvmng_group_lookup으로 멤버 resolve (동기)
              ├─ usp_mobile_apvmng_request_create (REQ_ID 생성)
              ├─ netra_apvmng_requests에 매핑 저장
-             ├─ usp_mobile_apvmng_step_apv_add (단계별 승인자 병렬 등록)
-             └─ 1단계 승인자에게 푸시 (user_id → emp_code 폴백)
+             ├─ usp_mobile_apvmng_step_apv_add × N (단계별 승인자 병렬 등록)
+             └─ after(): 1단계 승인자에게 푸시 발송
 
 승인자가 APVMNG_01에서 승인/반려
   └─ POST /api/approval/action
@@ -98,7 +108,7 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
        ├─ netra_apvmng_actions에 액션 기록
        ├─ TypeScript에서 다음 상태 계산 (threshold 달성 여부)
        └─ usp_mobile_apvmng_set_step (ERP STATUS/STEP 갱신)
-             ├─ 다음 단계: 다음 단계 승인자에게 푸시 (user_id → emp_code 폴백)
+             ├─ 다음 단계: 다음 단계 승인자에게 푸시
              ├─ 최종 승인: 요청자 푸시 + LEAVE_01이면 ERP 연차 상태 UPDATE
              └─ 반려: 요청자 푸시 + LEAVE_01이면 ERP 연차 취소
 
@@ -108,7 +118,7 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
   └─ after() 비동기:
        ├─ netra_cancelled_reqs에 req_id 기록
        ├─ usp_mobile_apvmng_request_detail + usp_mobile_apvmng_set_step STATUS=REJECTED (병렬)
-       ├─ 현재 단계 승인자에게 취소 푸시 (user_id → emp_code 폴백)
+       ├─ 현재 단계 승인자에게 취소 푸시
        └─ netra_apvmng_actions / netra_apvmng_requests PG 정리
 ```
 
@@ -117,7 +127,7 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
 | 타입 | 설명 | 피커 동작 |
 |------|------|-----------|
 | `individual` (개인) | 특정 직원 1명 지정 | 선택 즉시 닫힘, 1명만 유지 |
-| `group` (그룹) | ERP 사용자 그룹 (`ENV_USER WHERE USER_TYPE='G'`) 다중 선택 | 완료 버튼으로 닫힘, threshold 설정 가능 |
+| `group` (그룹) | ERP 사용자 그룹 (`ENV_USER WHERE USER_TYPE='G'`) | 완료 버튼으로 닫힘, threshold 설정 가능 |
 | `dept_head` (부서장) | 신청자 소속 부서장 자동 배정 | 선택 불필요 |
 
 ## 지원 메뉴
@@ -129,8 +139,7 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
 
 ## user_id ≠ emp_code 거래처 대응
 
-거래처에 따라 ERP 로그인 ID(`user_id`)와 사번(`emp_code`)이 다를 수 있습니다.  
-(예: 미래소프트 `user_id=pmk`, `emp_code=pmk` / OIL_TEST `user_id=soshim`, `emp_code=19020101`)
+거래처에 따라 ERP 로그인 ID(`user_id`)와 사번(`emp_code`)이 다를 수 있습니다.
 
 - **승인 목록 조회**: userId와 empCode 양쪽으로 ERP 조회 후 REQ_ID 기준 중복 제거 (`fetchMerged`)
 - **푸시 발송**: `netra_push_subs.user_id` 조회 → 0건이면 `emp_code`로 폴백 조회
@@ -138,7 +147,19 @@ ERP 권한(ENV_MOBILE_PERMIS)과 무관하게 항상 표시되는 STATIC 메뉴�
 
 ## 설치
 
-`docs/sql/approval-process.sql` 전체를 거래처 ERP DB(SQL Server 2008 이상)에서 실행합니다.  
-**테이블 4개 + 프로시저 15개**가 생성됩니다. 이미 설치된 경우 재실행해도 안전합니다(IF NOT EXISTS / DROP+CREATE).
+1. `docs/sql/approval-process.sql` 실행 — 앱 운영 테이블 4개 + SP 생성
+2. `docs/sql/mybuilder-workflow.sql` 실행 — PROCESS_STEP·MENU_MAP 테이블 + MyBuilder CRUD 쿼리
+3. `docs/sql/approval-sp-alter.sql` — ERP에 ALTER PROCEDURE로 SP 11개 등록
 
-거래처별 추가 패치가 필요한 경우 `docs/sql/erp-procedure-patches.sql`을 참고합니다.
+이미 설치된 경우 재실행해도 안전합니다(IF NOT EXISTS / ALTER).
+
+## MyBuilder 그리드 구성
+
+승인 절차 설정 화면(APVMNG_02)의 CRUD는 `docs/sql/mybuilder-workflow.sql` Section 4~7 참고.
+
+| 그리드 | 테이블 | 비고 |
+|--------|--------|------|
+| grd_mst | TB_MOBILE_APVMNG_PROCESS | 워크플로우 목록 |
+| grd_itm | TB_MOBILE_APVMNG_PROCESS_STEP | 단계 목록 (grd_mst 선택 연동) |
+| grd_msg | TB_MOBILE_APVMNG_PROCESS_STEP | 메시지 폼 (grd_itm 선택 연동) |
+| grd_map | TB_MOBILE_APVMNG_MENU_MAP | 메뉴 연결 목록 |

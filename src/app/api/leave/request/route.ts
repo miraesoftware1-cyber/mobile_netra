@@ -33,7 +33,9 @@ interface InsertHolidayApiResponse {
 
 let _reqsTableEnsured = false;
 
-type StepApprover = { stepNo: number; apvType: string; empCode: string; userId?: string; threshold: number };
+type StepApprover = { stepNo: number; apvType: string; empCode: string; userId?: string };
+
+type RequesterPush = { pushEnabled: boolean; messageTitle?: string; messageBody?: string };
 
 type ApprovalSetup =
   | { kind: 'fallback'; corp_code: string; dpt_code: string; emp_code: string; emp_name: string }
@@ -44,6 +46,7 @@ type ApprovalSetup =
       usedDays: number; dpt_code: string;
       reqId: number; stepApprovers: StepApprover[];
       step1Config: { messageTitle?: string; messageBody?: string } | undefined;
+      requesterPush: RequesterPush | undefined;
     };
 
 export async function POST(request: NextRequest) {
@@ -74,12 +77,7 @@ export async function POST(request: NextRequest) {
     param7: String(usedDays), param8: note, param9: reason, param10: phoneNumber,
   });
 
-  // insert_holiday와 process_get은 독립적이므로 병렬 호출
-  const procParams = new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' });
-  const [insertRes, procRes] = await Promise.all([
-    fetch(`${baseUrl}/R2JsonProc.asp?${insertParams.toString()}`).catch(() => null),
-    fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' }),
-  ]);
+  const insertRes = await fetch(`${baseUrl}/R2JsonProc.asp?${insertParams.toString()}`).catch(() => null);
 
   if (!insertRes?.ok) return NextResponse.json({ error: '연차 신청 중 오류가 발생했습니다.' }, { status: 502 });
 
@@ -94,7 +92,6 @@ export async function POST(request: NextRequest) {
   const setup = await prepareApproval({
     baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
     leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
-    prefetchedProcRes: procRes,
   });
 
   // ── after(): 승인자 등록 + 푸시 (느린 ERP 호출, 응답 후 실행) ───────────────
@@ -136,75 +133,100 @@ async function prepareApproval(args: {
   prefetchedProcRes?: Response | null;
 }): Promise<ApprovalSetup> {
   const { baseUrl, companyCode, corp_code, dpt_code, emp_code, emp_name,
-    leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq,
-    prefetchedProcRes } = args;
+    leaveTypeCode, leaveTypeName, appliedDate, startDate, endDate, usedDays, reason, note, yearSeq } = args;
 
-  // 1. 절차 설정 조회 (prefetch된 경우 재사용)
-  const procRes = prefetchedProcRes ?? await fetchWithTimeout(
-    `${baseUrl}/R2JsonProc.asp?${new URLSearchParams({ proc: 'usp_mobile_apvmng_process_get', param1: 'LEAVE_01' })}`,
-    { cache: 'no-store' },
-  );
-  const procRaw = procRes?.ok ? await procRes.json().catch(() => null) : null;
-  console.log('[approval] process_get Flag:', procRaw?.Flag);
+  // 1. ERP에서 절차 설정 조회 (MyBuilder에서 관리)
+  const procParams = new URLSearchParams({
+    proc: 'usp_mobile_apvmng_process_get',
+    param1: 'LEAVE_01',
+  });
+  const procRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${procParams}`, { cache: 'no-store' });
+  const procData = await procRes?.json().catch(() => null);
 
-  if (!procRaw || String(procRaw.Flag) !== '0' || !procRaw.items?.length) {
+  type CfgRow = { step_no: number; step_type: string; push_enabled: boolean; msg_title: string | null; msg_body: string | null };
+  let cfgRows: CfgRow[] = [];
+  if (String(procData?.Flag) === '0' && Array.isArray(procData?.items)) {
+    cfgRows = (procData.items as Record<string, unknown>[]).map((item, idx) => ({
+      step_no:      Number(item.STEP_NO ?? idx + 1),
+      step_type:    String(item.STEP_TYPE ?? ''),
+      push_enabled: item.PUSH_YN === 'Y',
+      msg_title:    (item.MSG_TITLE as string | null) ?? null,
+      msg_body:     (item.MSG_BODY  as string | null) ?? null,
+    })).filter(r => r.step_type);
+
+    // PG 커스텀 메시지 오버레이 (선택)
+    try {
+      const { rows: msgRows } = await query<{ step_type: string; msg_title: string | null; msg_body: string | null }>(
+        'SELECT step_type, msg_title, msg_body FROM netra_apvmng_step_msg WHERE menu_id = $1',
+        ['LEAVE_01'],
+      );
+      const msgMap = new Map(msgRows.map(r => [r.step_type, r]));
+      cfgRows = cfgRows.map(r => {
+        const pg = msgMap.get(r.step_type);
+        return { ...r, msg_title: pg?.msg_title ?? r.msg_title, msg_body: pg?.msg_body ?? r.msg_body };
+      });
+    } catch { /* 무시 */ }
+  }
+
+  console.log('[approval] ERP 단계 수:', cfgRows.length);
+  if (!cfgRows.length) {
     return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
   }
 
-  // PROCESS_STEP rows → step_no 기준 집계
-  const rawItems: Record<string, unknown>[] = procRaw.items;
-  const stepMap = new Map<number, { stepNo: number; type: string; apvCode: string; threshold: number; messageTitle: string; messageBody: string }>();
-  for (const item of rawItems) {
-    const no = Number(item.STEP_NO);
-    if (!stepMap.has(no)) {
-      stepMap.set(no, {
-        stepNo:       no,
-        type:         (item.STEP_TYPE    as string) ?? 'individual',
-        apvCode:      (item.APV_CODE     as string) ?? '',
-        threshold:    Number(item.THRESHOLD ?? 1),
-        messageTitle: (item.MSG_TITLE    as string) ?? '',
-        messageBody:  (item.MSG_BODY     as string) ?? '',
-      });
+  // 2. ERP 조직도 계층 조회 (usp_mobile_apvmng_get_hierarchy)
+  const hierParams = new URLSearchParams({
+    proc: 'usp_mobile_apvmng_get_hierarchy',
+    param1: corp_code, param2: dpt_code, param3: emp_code,
+  });
+  const hierRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${hierParams}`, { cache: 'no-store' });
+  const hierData = await hierRes?.json().catch(() => null);
+  console.log('[approval] get_hierarchy items:', hierData?.items?.length ?? 0);
+
+  // step_type → 조회된 emp_code 매핑 (첫 번째 결과만 사용 — 단일 승인자)
+  const hierMap = new Map<string, { empCode: string; empName: string }>();
+  for (const row of (hierData?.items ?? []) as { STEP_TYPE: string; EMP_CODE: string; EMP_NAME: string }[]) {
+    if (!hierMap.has(row.STEP_TYPE)) {
+      hierMap.set(row.STEP_TYPE, { empCode: row.EMP_CODE, empName: row.EMP_NAME });
     }
   }
-  const steps = [...stepMap.values()].sort((a, b) => a.stepNo - b.stepNo);
-  if (!steps.length) return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
 
-  // 2. 모든 승인자 resolve (그룹도 여기서 처리)
+  // 3. 설정된 단계 × 계층 조회 결과 매핑 → 실제 승인자 목록
+  // requester(담당) 단계는 신청자 본인이므로 승인 체인에서 제외, 접수 확인 푸시만 발송
+  const requesterCfgRow = cfgRows.find(r => r.step_type === 'requester');
+  const requesterPush: RequesterPush | undefined = requesterCfgRow
+    ? { pushEnabled: requesterCfgRow.push_enabled, messageTitle: requesterCfgRow.msg_title ?? undefined, messageBody: requesterCfgRow.msg_body ?? undefined }
+    : undefined;
+
   const stepApprovers: StepApprover[] = [];
-  for (const step of steps) {
-    if (step.type === 'group') {
-      if (step.apvCode) {
-        const p = new URLSearchParams({ proc: 'usp_mobile_apvmng_group_lookup', param1: step.apvCode });
-        const r = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
-        const d = await r?.json().catch(() => null);
-        const members: Array<{ EMP_CODE: string }> = d?.items ?? [];
-        if (members.length === 0) {
-          stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: step.apvCode, userId: step.apvCode, threshold: step.threshold });
-        } else {
-          for (const m of members) {
-            stepApprovers.push({ stepNo: step.stepNo, apvType: 'GROUP', empCode: m.EMP_CODE, userId: m.EMP_CODE, threshold: step.threshold });
-          }
-        }
-      }
-    } else if (step.type === 'dept_head') {
-      // 부서장은 PG에서 즉시 조회 (빠름)
-      const { rows: heads } = await query<{ emp_code: string }>(
-        `SELECT emp_code FROM netra_push_subs WHERE corp_code = $1 AND manage_dpt_codes LIKE $2`,
-        [corp_code, `%${dpt_code}%`],
-      ).catch(() => ({ rows: [] as { emp_code: string }[] }));
-      for (const h of heads) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType: 'DEPT_HEAD', empCode: h.emp_code, threshold: 1 });
-      }
-    } else {
-      // individual: APV_CODE = 사원코드
-      if (step.apvCode) {
-        stepApprovers.push({ stepNo: step.stepNo, apvType: 'INDIVIDUAL', empCode: step.apvCode, userId: step.apvCode, threshold: step.threshold });
-      }
+  let stepNo = 0;
+  for (const cfg of cfgRows) {
+    if (cfg.step_type === 'requester') continue; // 승인 불필요, 위에서 requesterPush로 처리
+    const approver = hierMap.get(cfg.step_type);
+    if (!approver) {
+      console.log(`[approval] ${cfg.step_type} 승인자 없음 — 단계 건너뜀`);
+      continue;
     }
+    stepNo += 1;
+    stepApprovers.push({
+      stepNo,
+      apvType: cfg.step_type.toUpperCase(),
+      empCode: approver.empCode,
+      userId:  approver.empCode,
+    });
   }
 
-  // 3. ERP 승인 요청 생성
+  if (!stepApprovers.length) {
+    console.log('[approval] 유효한 승인자 없음 — fallback');
+    return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
+  }
+
+  // 첫 실제 승인 단계(requester 제외) 메시지 설정
+  const firstApprovalCfg = cfgRows.find(r => r.step_type !== 'requester');
+  const step1Config = firstApprovalCfg
+    ? { messageTitle: firstApprovalCfg.msg_title ?? undefined, messageBody: firstApprovalCfg.msg_body ?? undefined }
+    : undefined;
+
+  // 4. ERP 승인 요청 생성
   const payloadJson = {
     신청자: emp_name || emp_code, 휴가종류: leaveTypeName || leaveTypeCode,
     신청일자: `${appliedDate.slice(0,4)}.${appliedDate.slice(4,6)}.${appliedDate.slice(6,8)}`,
@@ -214,12 +236,12 @@ async function prepareApproval(args: {
   const createParams = new URLSearchParams({
     proc: 'usp_mobile_apvmng_request_create',
     param1: 'LEAVE_01', param2: emp_code, param3: emp_name,
-    param4: JSON.stringify(payloadJson), param5: '{}', param6: String(steps.length),
+    param4: JSON.stringify(payloadJson), param5: '{}', param6: String(stepApprovers.length),
   });
   const createRes = await fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${createParams}`, { cache: 'no-store' });
   const createData = await createRes?.json().catch(() => null);
   const reqId: number = Number(createData?.items?.[0]?.REQ_ID ?? 0);
-  console.log('[approval] request_create Flag:', createData?.Flag, 'REQ_ID:', reqId);
+  console.log('[approval] request_create Flag:', createData?.Flag, 'MSG:', createData?.items?.[0]?.MSG ?? createData?.MSG, 'REQ_ID:', reqId);
   if (!reqId || String(createData?.Flag) !== '0') return { kind: 'fallback', corp_code, dpt_code, emp_code, emp_name };
 
   // 단계별 승인자 등록 (그룹 resolve 완료된 상태)
@@ -228,7 +250,7 @@ async function prepareApproval(args: {
       const p = new URLSearchParams({
         proc: 'usp_mobile_apvmng_step_apv_add',
         param1: String(reqId), param2: String(apv.stepNo),
-        param3: apv.apvType, param4: apv.empCode, param5: String(apv.threshold),
+        param3: apv.apvType, param4: apv.empCode,
       });
       return fetchWithTimeout(`${baseUrl}/R2JsonProc.asp?${p}`, { cache: 'no-store' });
     }),
@@ -257,7 +279,7 @@ async function prepareApproval(args: {
   return {
     kind: 'flow', baseUrl, companyCode, corp_code, emp_code, emp_name,
     leaveTypeName, leaveTypeCode, startDate, endDate, usedDays, dpt_code,
-    reqId, stepApprovers, step1Config: steps[0],
+    reqId, stepApprovers, step1Config, requesterPush,
   };
 }
 
@@ -281,9 +303,28 @@ async function sendNotifications(setup: ApprovalSetup) {
   }
 
   const { baseUrl, companyCode, corp_code, emp_code, emp_name, leaveTypeName, leaveTypeCode,
-    startDate, endDate, usedDays, dpt_code, reqId, stepApprovers, step1Config } = setup;
+    startDate, endDate, usedDays, dpt_code, reqId, stepApprovers, step1Config, requesterPush } = setup;
 
   const varArgs = { emp_name, emp_code, leaveTypeName, leaveTypeCode, startDate, endDate, usedDays, dpt_code };
+
+  // 신청자 접수 확인 푸시 (requester 단계 push_enabled=Y인 경우)
+  if (requesterPush?.pushEnabled) {
+    type SubRow2 = { subscription: webpush.PushSubscription; emp_code: string; user_id: string | null };
+    const { rows: reqSubs } = await query<SubRow2>(
+      `SELECT subscription, emp_code, user_id FROM netra_push_subs WHERE corp_code=$1 AND emp_code=$2`,
+      [corp_code, emp_code],
+    ).catch(() => ({ rows: [] as SubRow2[] }));
+    if (reqSubs.length > 0) {
+      const reqTitle = replaceVars(requesterPush.messageTitle ?? '연차 신청 접수', varArgs);
+      const reqBody  = replaceVars(requesterPush.messageBody  ?? '연차 신청이 접수되었습니다.', varArgs);
+      await Promise.allSettled(reqSubs.map(r =>
+        sendPushNotification(r.subscription, { title: reqTitle, body: reqBody, url: '/LEAVE/LEAVE_02', tag: `leave-req-${emp_code}` }),
+      ));
+      console.log('[push] 신청자 접수 확인 푸시:', emp_code, '(', reqSubs.length, '건)');
+    } else {
+      console.log('[push] 신청자 구독 없음:', emp_code);
+    }
+  }
 
   // 1단계 승인자 구독 조회 + 푸시 (stepApprovers는 prepareApproval에서 이미 resolve 완료)
   const step1Approvers = stepApprovers.filter((a) => a.stepNo === 1);
@@ -331,6 +372,10 @@ async function sendNotifications(setup: ApprovalSetup) {
     subs = [...subs, ...empRows];
   }
 
+  const msgTitle = replaceVars(step1Config?.messageTitle ?? '연차 신청 알림', varArgs);
+  const msgBody  = replaceVars(step1Config?.messageBody  ?? '{신청자}님이 연차를 신청했습니다.', varArgs);
+  console.log('[push] 메시지 내용 →', JSON.stringify({ title: msgTitle, body: msgBody, url: `/APVMNG/APVMNG_01?requestId=${reqId}` }));
+
   const { active: activeSubs, silent: silentSubs } = await categorizeSubscriptions(subs, corp_code);
 
   if (activeSubs.length + silentSubs.length === 0) {
@@ -339,9 +384,6 @@ async function sendNotifications(setup: ApprovalSetup) {
   }
 
   console.log('[push] 푸시 발송 (일반:', activeSubs.length, '/ 무음:', silentSubs.length, ')');
-
-  const msgTitle = replaceVars(step1Config?.messageTitle ?? '연차 신청 알림', varArgs);
-  const msgBody  = replaceVars(step1Config?.messageBody  ?? '{신청자}님이 연차를 신청했습니다.', varArgs);
 
   // 푸시 버튼 설정 조회 (Postgres)
   let pushCfg = { apvBtnLabel: '승인', rejBtnLabel: '반려', apvBtnAction: 'open_app', rejBtnAction: 'require_reason' };

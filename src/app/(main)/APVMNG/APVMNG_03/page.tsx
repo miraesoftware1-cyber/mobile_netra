@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, AlertCircle, AlertTriangle, Users, User, Building2, Zap, Bell, Save, ChevronDown, ChevronUp } from "lucide-react";
+// Users, AlertTriangle, Save: 하위 컴포넌트에서 사용
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { useMenuTitle } from "@/features/menu/use-menu-store";
 
@@ -11,14 +12,9 @@ const APPROVAL_MENUS = [
   { id: "EXP_01",   name: "지출 결의" },
 ];
 
-type StepMember = { empCode: string; empName: string };
-
 type Step = {
   stepNo: number;
   type: string;
-  members: StepMember[];
-  threshold: number;
-  allowFinalDecision: boolean;
   pushEnabled: boolean;
   messageTitle: string;
   messageBody: string;
@@ -166,32 +162,43 @@ function PushConfigSection({ menuId, initial }: { menuId: string; initial: PushC
 }
 
 const STEP_CONFIG: Record<string, { label: string; icon: React.ReactNode; bg: string; border: string; text: string; dot: string }> = {
-  individual: {
-    label: "개인",
+  requester: {
+    label: "담당",
+    icon: <User className="w-3.5 h-3.5" />,
+    bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600", dot: "bg-gray-400",
+  },
+  team_leader: {
+    label: "팀장",
     icon: <User className="w-3.5 h-3.5" />,
     bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-600", dot: "bg-blue-500",
-  },
-  group: {
-    label: "그룹",
-    icon: <Users className="w-3.5 h-3.5" />,
-    bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-600", dot: "bg-violet-500",
   },
   dept_head: {
     label: "부서장",
     icon: <Building2 className="w-3.5 h-3.5" />,
     bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-600", dot: "bg-orange-500",
   },
+  div_head: {
+    label: "본부장",
+    icon: <Users className="w-3.5 h-3.5" />,
+    bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-600", dot: "bg-violet-500",
+  },
+  ceo: {
+    label: "대표",
+    icon: <Zap className="w-3.5 h-3.5" />,
+    bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-600", dot: "bg-rose-500",
+  },
 };
 
-function stepApproverLabel(step: Step): string {
-  if (step.type === "dept_head") return "소속 부서장";
-  if (step.members.length === 0) return "승인자 미지정";
-  if (step.members.length === 1) return step.members[0].empName;
-  return step.members.map(m => m.empName).join(", ");
-}
+const STEP_DESC: Record<string, string> = {
+  requester:   "담당자",
+  team_leader: "신청자 부서의 팀장",
+  dept_head:   "신청자 부서의 부서장",
+  div_head:    "상위 부서의 부서장",
+  ceo:         "회사 대표",
+};
 
 function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
-  const cfg = STEP_CONFIG[step.type] ?? STEP_CONFIG.individual;
+  const cfg = STEP_CONFIG[step.type] ?? STEP_CONFIG.dept_head;
 
   return (
     <div className="flex gap-3">
@@ -205,7 +212,6 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
 
       {/* 카드 */}
       <div className={`flex-1 rounded-xl border ${cfg.border} ${cfg.bg} p-3 mb-3`}>
-        {/* 유형 + 이름 */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text} border ${cfg.border} mb-1.5`}>
@@ -213,31 +219,16 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
               {cfg.label}
             </div>
             <p className="text-sm font-bold text-gray-900 leading-snug">
-              {stepApproverLabel(step)}
+              {STEP_DESC[step.type] ?? step.type}
             </p>
           </div>
-          {/* 배지들 */}
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            {step.type === "group" && step.threshold > 1 && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white border border-violet-200 text-violet-600">
-                {step.threshold}명 이상 승인
-              </span>
-            )}
-            {step.allowFinalDecision && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-600">
-                <Zap className="w-2.5 h-2.5" />
-                전결
-              </span>
-            )}
-            {step.pushEnabled && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-600">
-                <Bell className="w-2.5 h-2.5" />
-                알림
-              </span>
-            )}
-          </div>
+          {step.pushEnabled && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-600 flex-shrink-0">
+              <Bell className="w-2.5 h-2.5" />
+              알림
+            </span>
+          )}
         </div>
-        {/* 메시지 */}
         {step.messageTitle && (
           <p className="text-[11px] text-gray-400 mt-2 truncate">
             &ldquo;{step.messageTitle}&rdquo;

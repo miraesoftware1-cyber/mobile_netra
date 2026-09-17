@@ -134,14 +134,13 @@ export async function POST(request: NextRequest) {
   const stateRow = stateData?.items?.[0];
   if (!stateRow) return NextResponse.json({ error: '요청을 찾을 수 없습니다.' }, { status: 404 });
 
-  const curStep:   number = Number(stateRow.CURRENT_STEP ?? 1);
-  const totSteps:  number = Number(stateRow.TOTAL_STEPS  ?? 1);
-  const status:    string = String(stateRow.STATUS        ?? '');
-  const threshold: number = Number(stateRow.THRESHOLD     ?? 1);
+  const curStep:  number = Number(stateRow.CURRENT_STEP ?? 1);
+  const totSteps: number = Number(stateRow.TOTAL_STEPS  ?? 1);
+  const status:   string = String(stateRow.STATUS       ?? '');
 
   if (status !== 'PENDING') return NextResponse.json({ error: '이미 처리된 요청입니다.' }, { status: 400 });
 
-  // 2. PG 테이블에서 중복 처리 및 승인 수 확인
+  // 2. PG 테이블에서 중복 처리 확인
   await ensureActionsTable();
 
   const { rows: existing } = await query<{ id: number }>(
@@ -158,61 +157,31 @@ export async function POST(request: NextRequest) {
   );
   console.log('[action] PG insert done');
 
-  // 4. 다음 상태 결정
-  let newStatus   = status;
-  let nextStepNo  = 0;
+  // 4. 다음 상태 결정 (단일 승인자 — threshold 없음)
+  let newStatus  = status;
+  let nextStepNo = 0;
   let needSetStep = false;
 
-  // 전결: 남은 단계 무관하게 즉시 최종 승인
   if (isFinalApprove) {
+    // 전결: 즉시 최종 승인
     newStatus   = 'APPROVED';
     needSetStep = true;
     console.log('[action] 전결 처리 — 즉시 최종 승인');
   } else if (erpAction === 'REJECT') {
-    // 즉시 반려가 아니라, "남은 인원이 threshold 달성 불가능"할 때만 최종 반려
-    const apvListData = await erpGet(baseUrl, 'usp_mobile_apvmng_step_approvers', {
-      param1: String(reqId),
-      param2: String(curStep),
-    });
-    const totalApprovers = (apvListData?.items?.length) || 1;
-
-    const [{ rows: rejRows }, { rows: apvRows }] = await Promise.all([
-      query<{ cnt: string }>(
-        `SELECT COUNT(*)::text AS cnt FROM netra_apvmng_actions WHERE req_id=$1 AND step_no=$2 AND action='REJECT'`,
-        [reqId, curStep],
-      ),
-      query<{ cnt: string }>(
-        `SELECT COUNT(*)::text AS cnt FROM netra_apvmng_actions WHERE req_id=$1 AND step_no=$2 AND action='APPROVE'`,
-        [reqId, curStep],
-      ),
-    ]);
-    const rejCnt    = Number(rejRows[0]?.cnt ?? 0); // PG insert 후라 현재 반려 포함
-    const apvCntNow = Number(apvRows[0]?.cnt ?? 0);
-    const remaining = totalApprovers - rejCnt - apvCntNow; // 아직 미처리 인원
-    console.log('[action] reject: total:', totalApprovers, 'rej:', rejCnt, 'apv:', apvCntNow, 'remaining:', remaining, 'threshold:', threshold);
-
-    if (apvCntNow + remaining < threshold) {
-      // 남은 인원이 모두 승인해도 threshold 불가 → 최종 반려
-      newStatus   = 'REJECTED';
-      needSetStep = true;
-    }
-    // else: PENDING 유지 (다른 인원이 아직 threshold 달성 가능)
+    // 반려: 즉시 최종 반려
+    newStatus   = 'REJECTED';
+    needSetStep = true;
+    console.log('[action] 반려 처리');
   } else {
-    const { rows: approvals } = await query<{ cnt: string }>(
-      `SELECT COUNT(*)::text AS cnt FROM netra_apvmng_actions WHERE req_id=$1 AND step_no=$2 AND action='APPROVE'`,
-      [reqId, curStep],
-    );
-    const apvCnt = Number(approvals[0]?.cnt ?? 0);
-    console.log('[action] apvCnt:', apvCnt, 'threshold:', threshold);
-    if (apvCnt >= threshold) {
-      needSetStep = true;
-      if (curStep < totSteps) {
-        newStatus  = 'PENDING';
-        nextStepNo = curStep + 1;
-      } else {
-        newStatus = 'APPROVED';
-      }
+    // 승인: 다음 단계로 이동 또는 최종 승인
+    needSetStep = true;
+    if (curStep < totSteps) {
+      newStatus  = 'PENDING';
+      nextStepNo = curStep + 1;
+    } else {
+      newStatus = 'APPROVED';
     }
+    console.log('[action] 승인 — newStatus:', newStatus, 'nextStepNo:', nextStepNo);
   }
 
   // 5-7. ERP 상태 UPDATE + 요청자 정보 + 다음 단계 승인자 병렬 조회
@@ -249,19 +218,22 @@ export async function POST(request: NextRequest) {
         .map((r: Record<string, unknown>) => String(r.EMP_CODE ?? ''))
         .filter(Boolean);
       if (nextUserIds.length > 0) {
-        // PROCESS_STEP에서 다음 단계 MSG_TITLE / MSG_BODY 조회
+        // PostgreSQL netra_apvmng_step_config에서 다음 단계 메시지 조회
         let msgTitle = `${getMenuLabel(menuId || '승인')} 요청 — ${nextStepNo}단계`;
         let msgBody  = `${reqEmpName || '신청자'}님의 요청을 검토해 주세요.`;
         if (menuId) {
-          const procData = await erpGet(baseUrl, 'usp_mobile_apvmng_process_get', { param1: menuId });
-          const procItems: Record<string, unknown>[] = procData?.items ?? [];
-          const stepItem = procItems.find((r) => Number(r.STEP_NO) === nextStepNo);
-          if (stepItem) {
-            const rawTitle = String(stepItem.MSG_TITLE ?? '').trim();
-            const rawBody  = String(stepItem.MSG_BODY  ?? '').trim();
-            if (rawTitle) msgTitle = rawTitle;
-            if (rawBody)  msgBody  = rawBody;
-          }
+          try {
+            const { rows: stepCfg } = await query<{ msg_title: string | null; msg_body: string | null }>(
+              'SELECT msg_title, msg_body FROM netra_apvmng_step_config WHERE menu_id = $1 AND step_no = $2',
+              [menuId, nextStepNo],
+            );
+            if (stepCfg[0]) {
+              const rawTitle = (stepCfg[0].msg_title ?? '').trim();
+              const rawBody  = (stepCfg[0].msg_body  ?? '').trim();
+              if (rawTitle) msgTitle = rawTitle;
+              if (rawBody)  msgBody  = rawBody;
+            }
+          } catch { /* 무시 */ }
         }
         const vars = {
           requesterName: reqEmpName || String(payloadJson['신청자'] ?? '') || '신청자',
