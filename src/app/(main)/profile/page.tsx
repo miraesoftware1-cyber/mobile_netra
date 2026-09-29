@@ -261,7 +261,7 @@ export default function ProfilePage() {
           </div>
 
           {/* 알림 허용 */}
-          {user?.sms_enabled && notifPermission !== null && (
+          {notifPermission !== null && (
             <div className="flex flex-col border-b border-gray-50">
               <div className="flex items-center gap-3 px-4 py-4">
                 <Bell className="w-5 h-5 text-gray-400 flex-shrink-0" />
@@ -291,7 +291,7 @@ export default function ProfilePage() {
           )}
 
           {/* 무음 알림 시간대 */}
-          {user?.sms_enabled && <div className="border-b border-gray-50">
+          <div className="border-b border-gray-50">
             <div className="flex items-center gap-3 px-4 py-4">
               <BellOff className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <span className="flex-1 text-sm text-gray-700">무음 알림 시간대</span>
@@ -328,7 +328,7 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
-          </div>}
+          </div>
 
           {/* 앱 버전 */}
           <div className="flex items-center gap-3 px-4 py-4">

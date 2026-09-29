@@ -30,6 +30,20 @@ Next.js 기반 모바일 ERP 동반 앱 (연차/휴가, 지출결의, 일정관�
 
 ## 최근 변경사항
 
+### 승인 플로우 완성 (APVMNG)
+
+- **`requester`(담당) 단계 도입**: 신청자 본인 단계. 승인 체인에서 제외하고 접수 확인 푸시만 발송.
+- **실제 승인 체인**: requester 제외 후 team_leader → dept_head → div_head → ceo 순.
+- **조직도 SP 도입**: `usp_mobile_apvmng_get_hierarchy(corp_code, dpt_code, emp_code)` — step_type별 승인자를 조직도에서 동적 반환. PROCESS_STEP에 승인자 코드를 직접 박지 않음.
+- **ERP SP 수정**:
+  - `usp_mobile_apvmng_request_create` → `SCOPE_IDENTITY()`로 IDENTITY REQ_ID 반환
+  - `usp_mobile_apvmng_step_apv_add` → THRESHOLD 파라미터 제거 (param1~4만 사용)
+  - `usp_mobile_apvmng_request_list`, `step_state` → THRESHOLD 하드코딩 1
+- **`TB_MOBILE_APVMNG_PROCESS_STEP` 컬럼 변경**: APV_CODE·APV_NAME·THRESHOLD 삭제.
+- **PG `netra_apvmng_step_msg` 테이블 추가**: 단계별 푸시 메시지 커스텀 오버라이드.
+- **`/api/approval/process`**: GET은 ERP 단계 + PG 메시지 오버레이, POST는 메시지만 PG에 저장.
+- **APVMNG_02/03 페이지**: requester(담당) 단계 별도 표시 추가.
+
 ### 인증 (auth)
 
 - **SMS OTP 기기 신뢰**: SMS OTP 인증 완료 시 해당 기기를 `deviceTokenMap`에 등록. 이후 동일 기기(companyCode+phoneNumber 조합)로 로그인하면 OTP 단계 건너뜀. `sms_enabled=true`(attribute1=Y) 회사에만 적용.

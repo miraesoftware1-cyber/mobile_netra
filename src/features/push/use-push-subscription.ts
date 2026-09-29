@@ -20,7 +20,6 @@ export function usePushSubscription() {
 
   useEffect(() => {
     if (!user) return;
-    if (!user.sms_enabled) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
     // 세션당 한 번만 실행 (페이지 이동마다 재구독 방지)

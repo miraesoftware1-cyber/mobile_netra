@@ -199,14 +199,19 @@ export default function ScheduleListPage() {
   }, [scheduleItems, leaveItems, yearMonth]);
 
   const today = new Date();
-  const thisWeekStart = format(startOfWeek(today, { weekStartsOn: 1 }), "yyyyMMdd");
-  const thisWeekEnd   = format(endOfWeek(today,   { weekStartsOn: 1 }), "yyyyMMdd");
 
   function weekOfMonth(date: Date): number {
     const firstDow = getDay(startOfMonth(date));
     const adjusted = firstDow === 0 ? 6 : firstDow - 1;
     return Math.ceil((date.getDate() + adjusted) / 7);
   }
+
+  const isSameMonthAsToday = isSameMonth(currentMonth, today);
+
+  const thisWeekStart = format(startOfWeek(today, { weekStartsOn: 1 }), "yyyyMMdd");
+  const thisWeekEnd   = format(endOfWeek(today,   { weekStartsOn: 1 }), "yyyyMMdd");
+  const curMonthStart = format(startOfMonth(currentMonth), "yyyyMMdd");
+  const curMonthEnd   = format(endOfMonth(currentMonth),   "yyyyMMdd");
 
   const filteredItems = useMemo(() => {
     let items = monthItems;
@@ -220,19 +225,27 @@ export default function ScheduleListPage() {
         const end   = ymdNorm(i.end_date);
         return start <= dk && dk <= end;
       });
-    } else {
+    } else if (isSameMonthAsToday) {
       items = items.filter((i) => {
         const start = ymdNorm(i.beg_date);
         const end   = ymdNorm(i.end_date);
         return start <= thisWeekEnd && end >= thisWeekStart;
       });
+    } else {
+      items = items.filter((i) => {
+        const start = ymdNorm(i.beg_date);
+        const end   = ymdNorm(i.end_date);
+        return start <= curMonthEnd && end >= curMonthStart;
+      });
     }
     return items;
-  }, [monthItems, filter, myOnly, selectedDate, user?.emp_code]);
+  }, [monthItems, filter, myOnly, selectedDate, user?.emp_code, isSameMonthAsToday]);
 
   const listTitle = selectedDate
     ? format(new Date(`${selectedDate}T12:00:00`), "M월 d일 (E) 일정", { locale: ko })
-    : `${format(today, "M")}월 ${weekOfMonth(today)}주차 일정`;
+    : isSameMonthAsToday
+      ? `${format(today, "M")}월 ${weekOfMonth(today)}주차 일정`
+      : `${format(currentMonth, "M")}월 일정`;
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
