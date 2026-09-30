@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { useEffect, useState } from "react";
+import { formatDistanceToNow, format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Bell, BellOff } from "lucide-react";
+import { Bell, BellOff, X } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { useNotificationStore } from "@/features/notifications/use-notification-store";
 import type { NotificationRow } from "@/app/api/notifications/route";
@@ -16,12 +16,21 @@ function timeAgo(dateStr: string) {
   }
 }
 
-export default function NotificationsPage() {
-  const companyCode  = useAuthStore((s) => s.user?.companyCode ?? "");
-  const empCode      = useAuthStore((s) => s.user?.emp_code ?? "");
-  const { items, loading, setItems, markAllRead } = useNotificationStore();
+function fmtFull(dateStr: string) {
+  try {
+    return format(new Date(dateStr), "yyyy.MM.dd HH:mm", { locale: ko });
+  } catch {
+    return dateStr;
+  }
+}
 
-  // 탭 진입 시 즉시 최신 데이터 로드 + 읽음 처리
+export default function NotificationsPage() {
+  const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
+  const empCode     = useAuthStore((s) => s.user?.emp_code ?? "");
+  const { items, loading, setItems, markOneRead } = useNotificationStore();
+  const [detail, setDetail] = useState<NotificationRow | null>(null);
+
+  // 탭 진입 시 최신 데이터 로드 (읽음 처리는 클릭 시에만)
   useEffect(() => {
     if (!companyCode || !empCode) return;
     const params = new URLSearchParams({ companyCode, empCode });
@@ -30,16 +39,21 @@ export default function NotificationsPage() {
       .then((data: { items: NotificationRow[]; unreadCount: number }) => {
         setItems(data.items ?? [], data.unreadCount ?? 0);
       })
-      .catch(() => {})
-      .finally(() => {
-        fetch("/api/notifications", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companyCode, empCode, ids: "all" }),
-        }).catch(() => {});
-        markAllRead();
-      });
-  }, [companyCode, empCode, setItems, markAllRead]);
+      .catch(() => {});
+  }, [companyCode, empCode, setItems]);
+
+  function handleClick(n: NotificationRow) {
+    // 미확인이면 읽음 처리
+    if (!n.read_at) {
+      markOneRead(n.id);
+      fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyCode, empCode, ids: [n.id] }),
+      }).catch(() => {});
+    }
+    setDetail(n);
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -71,7 +85,8 @@ export default function NotificationsPage() {
               return (
                 <li
                   key={n.id}
-                  className={`px-5 py-4 flex gap-3 ${isUnread ? "bg-primary/[0.03]" : "bg-white"}`}
+                  onClick={() => handleClick(n)}
+                  className={`px-5 py-4 flex gap-3 cursor-pointer active:bg-gray-50 ${isUnread ? "bg-primary/[0.03]" : "bg-white"}`}
                 >
                   <div className="shrink-0 mt-0.5">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isUnread ? "bg-primary/10" : "bg-gray-100"}`}>
@@ -88,7 +103,7 @@ export default function NotificationsPage() {
                       )}
                     </div>
                     {n.body && (
-                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.body}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-1">{n.body}</p>
                     )}
                     <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.sent_at)}</p>
                   </div>
@@ -98,6 +113,35 @@ export default function NotificationsPage() {
           </ul>
         )}
       </div>
+
+      {/* 상세 팝업 */}
+      {detail && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={() => setDetail(null)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-6 pointer-events-none">
+            <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl pointer-events-auto">
+              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold text-gray-900">{detail.title}</span>
+                </div>
+                <button onClick={() => setDetail(null)} className="p-1 text-gray-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {detail.body && (
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{detail.body}</p>
+                )}
+                <p className="text-xs text-gray-400">{fmtFull(detail.sent_at)}</p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

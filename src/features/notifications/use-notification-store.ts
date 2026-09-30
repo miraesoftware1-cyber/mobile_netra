@@ -10,6 +10,7 @@ interface NotificationStore {
   setItems:    (items: NotificationRow[], unreadCount: number) => void;
   setLoading:  (v: boolean) => void;
   markAllRead: () => void;
+  markOneRead: (id: number) => void;
   decrementUnread: (count: number) => void;
 }
 
@@ -24,6 +25,17 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
       unreadCount: 0,
       items: s.items.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })),
     })),
+  markOneRead: (id) =>
+    set((s) => {
+      const target = s.items.find((n) => n.id === id);
+      if (!target || target.read_at) return {};
+      return {
+        unreadCount: Math.max(0, s.unreadCount - 1),
+        items: s.items.map((n) =>
+          n.id === id ? { ...n, read_at: new Date().toISOString() } : n
+        ),
+      };
+    }),
   decrementUnread: (count) =>
     set((s) => ({ unreadCount: Math.max(0, s.unreadCount - count) })),
 }));
