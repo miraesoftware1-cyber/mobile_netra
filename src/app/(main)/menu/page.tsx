@@ -105,7 +105,7 @@ export default function MenuPage() {
     const params = new URLSearchParams({ companyCode, userId, userType });
     fetch(`/api/menu-visibility?${params.toString()}`)
       .then((r) => r.json())
-      .then((data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean; approve: boolean }> }) => {
+      .then((data: { items: MenuDBItem[] | null; perms?: Record<string, import('@/app/api/menu-visibility/route').MenuPerm> }) => {
         const arr = Array.isArray(data.items) ? data.items : [];
         setMenuStoreItems(arr);
         if (data.perms) setMenuStorePerms(data.perms);

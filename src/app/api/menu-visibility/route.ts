@@ -37,6 +37,10 @@ export interface MenuPerm {
   edit: boolean;
   del: boolean;
   approve: boolean;
+  gpr1: boolean;  // 타사업장 조회
+  gpr2: boolean;  // 타부서 조회
+  gpr3: boolean;  // 타사원 조회
+  gpr4: boolean;
 }
 
 function yn(v: unknown): boolean { return v === "Y" || v === "y"; }
@@ -51,13 +55,17 @@ function normRow(raw: Record<string, unknown>): Record<string, unknown> {
 function rowToPerm(raw: Record<string, unknown>): MenuPerm {
   const r = normRow(raw);
   const hasCrud = "per_ret" in r || "per_ins" in r || "per_mod" in r || "per_del" in r;
-  if (!hasCrud) return { view: true, add: true, edit: true, del: true, approve: true };
+  if (!hasCrud) return { view: true, add: true, edit: true, del: true, approve: true, gpr1: true, gpr2: true, gpr3: true, gpr4: true };
   return {
-    view: yn(r.per_ret),
-    add: yn(r.per_ins),
-    edit: yn(r.per_mod),
-    del: yn(r.per_del),
+    view:    yn(r.per_ret),
+    add:     yn(r.per_ins),
+    edit:    yn(r.per_mod),
+    del:     yn(r.per_del),
     approve: yn(r.per_apv),
+    gpr1:    yn(r.per_gpr1),
+    gpr2:    yn(r.per_gpr2),
+    gpr3:    yn(r.per_gpr3),
+    gpr4:    yn(r.per_gpr4),
   };
 }
 
@@ -129,7 +137,7 @@ export async function GET(request: NextRequest) {
   if (userType === "S") {
     const fullPerms: Record<string, MenuPerm> = {};
     for (const m of menuData.items) {
-      fullPerms[m.menu_id] = { view: true, add: true, edit: true, del: true, approve: true };
+      fullPerms[m.menu_id] = { view: true, add: true, edit: true, del: true, approve: true, gpr1: true, gpr2: true, gpr3: true, gpr4: true };
     }
     return NextResponse.json({ items: menuData.items, perms: fullPerms });
   }
@@ -167,7 +175,7 @@ export async function GET(request: NextRequest) {
   // 자식이 권한 시스템에 있는데 부모 자신은 반환되지 않은 경우 → 부모 N
   for (const pid of parentIdsWithChildren) {
     if (!perms[pid]) {
-      perms[pid] = { view: false, add: false, edit: false, del: false, approve: false };
+      perms[pid] = { view: false, add: false, edit: false, del: false, approve: false, gpr1: false, gpr2: false, gpr3: false, gpr4: false };
     }
   }
 
