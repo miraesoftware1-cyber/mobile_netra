@@ -544,20 +544,16 @@ export default function LeaveNotifyPage() {
             <div className="space-y-3 mb-6">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">기준일</label>
-                <input
-                  type="date"
+                <DatePickerField
                   value={createForm.yearStdate}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, yearStdate: e.target.value }))}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                  onChange={(v) => setCreateForm((f) => ({ ...f, yearStdate: v }))}
                 />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">촉진일 <span className="text-red-400">*</span></label>
-                <input
-                  type="date"
+                <DatePickerField
                   value={createForm.hurryDate}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, hurryDate: e.target.value }))}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                  onChange={(v) => setCreateForm((f) => ({ ...f, hurryDate: v }))}
                 />
               </div>
             </div>
