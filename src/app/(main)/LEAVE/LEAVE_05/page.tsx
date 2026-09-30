@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Bell, X, BellOff, Loader2, FileText } from "lucide-react";
+import { ChevronLeft, Bell, X, BellOff, Loader2, FileText, ChevronDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMenuStore } from "@/features/menu/use-menu-store";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 
@@ -330,110 +331,110 @@ export default function LeaveNotifyPage() {
       <div className="shrink-0 bg-white border-b border-gray-100 px-4 py-3 space-y-2">
         {/* 년도 / 미사용만 */}
         <div className="flex items-center gap-2">
-          <select
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            {YEAR_OPTIONS.map((y) => (
-              <option key={y} value={y}>{y}년</option>
-            ))}
-          </select>
+          <Select value={year} onValueChange={setYear}>
+            <SelectTrigger className="h-11 w-28 border-gray-200 font-normal shadow-none text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {YEAR_OPTIONS.map((y) => (
+                <SelectItem key={y} value={y}>{y}년</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <button
-            onClick={() => setRemainOnly((v) => !v)}
-            className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-              remainOnly ? "bg-primary/10 text-primary font-medium" : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            미사용만
-          </button>
+          <label className="flex items-center gap-2 cursor-pointer select-none h-11 px-1">
+            <input
+              type="checkbox"
+              checked={remainOnly}
+              onChange={(e) => setRemainOnly(e.target.checked)}
+              className="w-4 h-4 rounded accent-primary cursor-pointer"
+            />
+            <span className="text-sm text-gray-700">미사용만</span>
+          </label>
 
           <span className="ml-auto text-xs text-gray-400">
             {listLoading ? "…" : `${displayEmployees.length}명`}
           </span>
         </div>
 
-        {/* 기준일 ~ 촉진일 */}
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 flex-col gap-0.5">
-            <span className="text-[10px] text-gray-400 px-0.5">기준일</span>
+        {/* 기준일 / 촉진일 / 부서 / 사원 — 2열 그리드로 너비 통일 */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-gray-400">기준일</span>
             <input
               type="date"
               value={filterYearStdate}
               onChange={(e) => setFilterYearStdate(e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-11 w-full text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-          <span className="text-gray-300 mt-4">~</span>
-          <div className="flex flex-1 flex-col gap-0.5">
-            <span className="text-[10px] text-gray-400 px-0.5">촉진일</span>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-gray-400">촉진일</span>
             <input
               type="date"
               value={filterHurryDate}
               onChange={(e) => setFilterHurryDate(e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-11 w-full text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-        </div>
 
-        {(canViewOtherDept || canViewOtherEmp) && (
-          <div className="flex gap-2">
-            {canViewOtherDept && (
-              <select
-                value={filterDept}
-                onChange={(e) => { setFilterDept(e.target.value); setFilterEmp(""); }}
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="">전체 부서</option>
+          {canViewOtherDept && (
+            <Select
+              value={filterDept}
+              onValueChange={(v) => { setFilterDept(v === "__all__" ? "" : v); setFilterEmp(""); }}
+            >
+              <SelectTrigger className="h-11 w-full border-gray-200 font-normal shadow-none text-sm">
+                <SelectValue placeholder="전체 부서" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">전체 부서</SelectItem>
                 {deptOptions.map((d) => (
-                  <option key={d} value={d}>{d}</option>
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
                 ))}
-              </select>
-            )}
-            {canViewOtherEmp && (
-              <div className="flex-1 relative">
-                <button
-                  onClick={() => setShowEmpDropdown((v) => !v)}
-                  className="w-full flex items-center justify-between text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <span className={filterEmp ? "text-gray-700" : "text-gray-300"}>
-                    {filterEmp
-                      ? (employees.find((e) => e.emp_code === filterEmp)?.emp_name ?? "전체 사원")
-                      : "전체 사원"}
-                  </span>
-                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+              </SelectContent>
+            </Select>
+          )}
 
-                {showEmpDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowEmpDropdown(false)} />
-                    <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-52 overflow-y-auto">
+          {canViewOtherEmp && (
+            <div className="relative">
+              <button
+                onClick={() => setShowEmpDropdown((v) => !v)}
+                className="h-11 w-full flex items-center justify-between text-sm border border-gray-200 rounded-lg px-3 bg-white focus:outline-none"
+              >
+                <span className={filterEmp ? "text-gray-700" : "text-gray-500"}>
+                  {filterEmp
+                    ? (employees.find((e) => e.emp_code === filterEmp)?.emp_name ?? "전체 사원")
+                    : "전체 사원"}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
+
+              {showEmpDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowEmpDropdown(false)} />
+                  <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-52 overflow-y-auto">
+                    <button
+                      onClick={() => { setFilterEmp(""); setShowEmpDropdown(false); }}
+                      className="w-full text-left px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100"
+                    >
+                      전체 사원
+                    </button>
+                    {empCandidates.map((e) => (
                       <button
-                        onClick={() => { setFilterEmp(""); setShowEmpDropdown(false); }}
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100"
+                        key={e.emp_code}
+                        onClick={() => { setFilterEmp(e.emp_code); setShowEmpDropdown(false); }}
+                        className={`w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0 ${filterEmp === e.emp_code ? "bg-primary/5" : ""}`}
                       >
-                        전체 사원
+                        <span className="text-sm text-gray-800 font-medium">{e.emp_name}</span>
+                        <span className="text-xs text-gray-400 ml-1.5">{e.dpt_name}</span>
                       </button>
-                      {empCandidates.map((e) => (
-                        <button
-                          key={e.emp_code}
-                          onClick={() => { setFilterEmp(e.emp_code); setShowEmpDropdown(false); }}
-                          className={`w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0 ${filterEmp === e.emp_code ? "bg-primary/5" : ""}`}
-                        >
-                          <span className="text-sm text-gray-800 font-medium">{e.emp_name}</span>
-                          <span className="text-xs text-gray-400 ml-1.5">{e.dpt_name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 목록 */}

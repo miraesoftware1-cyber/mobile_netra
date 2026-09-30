@@ -6,6 +6,7 @@ import { ko } from "date-fns/locale";
 import { Bell, BellOff } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { useNotificationStore } from "@/features/notifications/use-notification-store";
+import type { NotificationRow } from "@/app/api/notifications/route";
 
 function timeAgo(dateStr: string) {
   try {
@@ -18,17 +19,27 @@ function timeAgo(dateStr: string) {
 export default function NotificationsPage() {
   const companyCode  = useAuthStore((s) => s.user?.companyCode ?? "");
   const empCode      = useAuthStore((s) => s.user?.emp_code ?? "");
-  const { items, loading, markAllRead } = useNotificationStore();
+  const { items, loading, setItems, markAllRead } = useNotificationStore();
 
+  // 탭 진입 시 즉시 최신 데이터 로드 + 읽음 처리
   useEffect(() => {
     if (!companyCode || !empCode) return;
-    fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ companyCode, empCode, ids: "all" }),
-    }).catch(() => {});
-    markAllRead();
-  }, [companyCode, empCode, markAllRead]);
+    const params = new URLSearchParams({ companyCode, empCode });
+    fetch(`/api/notifications?${params}`)
+      .then((r) => r.json())
+      .then((data: { items: NotificationRow[]; unreadCount: number }) => {
+        setItems(data.items ?? [], data.unreadCount ?? 0);
+      })
+      .catch(() => {})
+      .finally(() => {
+        fetch("/api/notifications", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyCode, empCode, ids: "all" }),
+        }).catch(() => {});
+        markAllRead();
+      });
+  }, [companyCode, empCode, setItems, markAllRead]);
 
   return (
     <div className="flex flex-col h-full">
