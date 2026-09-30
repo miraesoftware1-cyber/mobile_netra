@@ -95,7 +95,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm font-medium leading-snug ${isUnread ? "text-gray-900" : "text-gray-600"}`}>
+                      <p className={`text-sm leading-snug ${isUnread ? "font-semibold text-gray-900" : "font-normal text-gray-500"}`}>
                         {n.title}
                       </p>
                       {isUnread && (
