@@ -105,7 +105,8 @@ export default function LeaveNotifyPage() {
   const [filterHurryDate,  setFilterHurryDate]  = useState(defaultHurryDate);
   const [filterDept, setFilterDept] = useState("");
   const [filterEmp, setFilterEmp]   = useState("");
-  const [showEmpDropdown, setShowEmpDropdown] = useState(false);
+  const [showEmpDropdown, setShowEmpDropdown]   = useState(false);
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [listLoading, setListLoading] = useState(false);
@@ -357,58 +358,94 @@ export default function LeaveNotifyPage() {
           </span>
         </div>
 
-        {/* 기준일 / 촉진일 / 부서 / 사원 — 2열 그리드로 너비 통일 */}
+        {/* 기준일 / 촉진일 / 부서 / 사원 — 2열 그리드, floating label 스타일 통일 */}
         <div className="grid grid-cols-2 gap-2">
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] text-gray-400">기준일</span>
+
+          {/* 기준일: 커스텀 표시 + hidden date input (iOS 렌더링 충돌 방지) */}
+          <div className="relative h-11 border border-gray-200 rounded-lg bg-white overflow-hidden">
+            <div className="absolute inset-0 px-3 flex flex-col justify-center gap-0.5 pointer-events-none z-10">
+              <span className="text-[10px] text-gray-400 leading-none">기준일</span>
+              <span className="text-sm text-gray-700 leading-tight truncate">{filterYearStdate.replace(/-/g, '.')}</span>
+            </div>
             <input
               type="date"
               value={filterYearStdate}
               onChange={(e) => setFilterYearStdate(e.target.value)}
-              className="h-11 w-full text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] text-gray-400">촉진일</span>
+
+          {/* 촉진일 */}
+          <div className="relative h-11 border border-gray-200 rounded-lg bg-white overflow-hidden">
+            <div className="absolute inset-0 px-3 flex flex-col justify-center gap-0.5 pointer-events-none z-10">
+              <span className="text-[10px] text-gray-400 leading-none">촉진일</span>
+              <span className="text-sm text-gray-700 leading-tight truncate">{filterHurryDate.replace(/-/g, '.')}</span>
+            </div>
             <input
               type="date"
               value={filterHurryDate}
               onChange={(e) => setFilterHurryDate(e.target.value)}
-              className="h-11 w-full text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
           </div>
 
+          {/* 부서 — floating label 드롭다운 */}
           {canViewOtherDept && (
-            <Select
-              value={filterDept}
-              onValueChange={(v) => { setFilterDept(v === "__all__" ? "" : v); setFilterEmp(""); }}
-            >
-              <SelectTrigger className="h-11 w-full border-gray-200 font-normal shadow-none text-sm">
-                <SelectValue placeholder="전체 부서" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">전체 부서</SelectItem>
-                {deptOptions.map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              <button
+                onClick={() => setShowDeptDropdown((v) => !v)}
+                className="relative h-11 w-full border border-gray-200 rounded-lg bg-white overflow-hidden text-left focus:outline-none"
+              >
+                <div className="absolute inset-0 px-3 pr-8 flex flex-col justify-center gap-0.5">
+                  <span className="text-[10px] text-gray-400 leading-none">부서</span>
+                  <span className={`text-sm leading-tight truncate ${filterDept ? "text-gray-700" : "text-gray-500"}`}>
+                    {filterDept || "전체 부서"}
+                  </span>
+                </div>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </button>
+              {showDeptDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowDeptDropdown(false)} />
+                  <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-52 overflow-y-auto">
+                    <button
+                      onClick={() => { setFilterDept(""); setFilterEmp(""); setShowDeptDropdown(false); }}
+                      className="w-full text-left px-3 py-2.5 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100"
+                    >
+                      전체 부서
+                    </button>
+                    {deptOptions.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => { setFilterDept(d); setFilterEmp(""); setShowDeptDropdown(false); }}
+                        className={`w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-50 last:border-0 ${filterDept === d ? "text-primary font-medium" : "text-gray-700"}`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
+          {/* 사원 — floating label 드롭다운 */}
           {canViewOtherEmp && (
             <div className="relative">
               <button
                 onClick={() => setShowEmpDropdown((v) => !v)}
-                className="h-11 w-full flex items-center justify-between text-sm border border-gray-200 rounded-lg px-3 bg-white focus:outline-none"
+                className="relative h-11 w-full border border-gray-200 rounded-lg bg-white overflow-hidden text-left focus:outline-none"
               >
-                <span className={filterEmp ? "text-gray-700" : "text-gray-500"}>
-                  {filterEmp
-                    ? (employees.find((e) => e.emp_code === filterEmp)?.emp_name ?? "전체 사원")
-                    : "전체 사원"}
-                </span>
-                <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                <div className="absolute inset-0 px-3 pr-8 flex flex-col justify-center gap-0.5">
+                  <span className="text-[10px] text-gray-400 leading-none">사원</span>
+                  <span className={`text-sm leading-tight truncate ${filterEmp ? "text-gray-700" : "text-gray-500"}`}>
+                    {filterEmp
+                      ? (employees.find((e) => e.emp_code === filterEmp)?.emp_name ?? "전체 사원")
+                      : "전체 사원"}
+                  </span>
+                </div>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               </button>
-
               {showEmpDropdown && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowEmpDropdown(false)} />
