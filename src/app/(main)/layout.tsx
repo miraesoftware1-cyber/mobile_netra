@@ -6,6 +6,7 @@ import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 import { useMenuStore } from "@/features/menu/use-menu-store";
 import { BottomTabNav } from "@/features/main/components/bottom-tab-nav";
 import { UpdateBanner } from "@/components/update-banner";
+import { useNotifications } from "@/features/notifications/use-notifications";
 import type { MenuDBItem } from "@/app/api/menu-visibility/route";
 
 export default function MainLayout({
@@ -20,6 +21,7 @@ export default function MainLayout({
   const userType    = useAuthStore((s) => s.user?.user_type ?? "");
   const setItems    = useMenuStore((s) => s.setItems);
   const setPerms    = useMenuStore((s) => s.setPerms);
+  useNotifications();
 
   // persist 스토어가 localStorage에서 복원될 때까지 대기
   const [hydrated, setHydrated] = useState(false);
@@ -48,7 +50,7 @@ export default function MainLayout({
       try {
         const params = new URLSearchParams({ companyCode, userId, userType });
         const r = await fetch(`/api/menu-visibility?${params.toString()}`);
-        const data: { items: MenuDBItem[] | null; perms?: Record<string, { view: boolean; add: boolean; edit: boolean; del: boolean; approve: boolean }> } = await r.json();
+        const data: { items: MenuDBItem[] | null; perms?: Record<string, import('@/app/api/menu-visibility/route').MenuPerm> } = await r.json();
         if (Array.isArray(data.items)) setItems(data.items);
         if (data.perms) setPerms(data.perms);
       } catch { /* 무시 */ }
