@@ -123,7 +123,11 @@ export default function LeaveNotifyPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => { setSelectedPrt(null); setDeleteConfirm(false); }, [prtList]);
+  // prt 로드 완료 시 가장 최근 명세 자동 선택
+  useEffect(() => {
+    setSelectedPrt(prtList.length > 0 ? prtList[0] : null);
+    setDeleteConfirm(false);
+  }, [prtList]);
 
   // ── Fetch list ───────────────────────────────────────────
 
@@ -619,17 +623,6 @@ export default function LeaveNotifyPage() {
                 ))}
               </div>
 
-              {/* prt 선택 시: 목록으로 돌아가기 버튼 */}
-              {selectedPrt && (
-                <button
-                  onClick={() => { setSelectedPrt(null); setDeleteConfirm(false); }}
-                  className="shrink-0 px-4 py-2 border-b border-gray-100 flex items-center gap-1 text-xs text-gray-500 hover:bg-gray-50"
-                >
-                  <ChevronDown className="w-3.5 h-3.5 rotate-90" />
-                  목록으로
-                </button>
-              )}
-
               {/* 명세 내용 */}
               <div className="flex-1 overflow-y-auto">
                 {prtLoading && (
@@ -638,62 +631,46 @@ export default function LeaveNotifyPage() {
                   </div>
                 )}
 
-                {/* 명세 리스트 (prt 미선택 시) */}
-                {!prtLoading && !selectedPrt && (
-                  <>
-                    {prtList.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-3">
-                        <p className="text-sm">생성된 명세가 없습니다</p>
-                        <button
-                          onClick={() => { setCreateTarget(selectedEmp); setCreateForm({ yearStdate: "", hurryDate: "" }); }}
-                          className="text-sm text-primary font-medium px-4 py-2 rounded-lg border border-primary/30 hover:bg-primary/5"
-                        >
-                          명세 생성하기
-                        </button>
-                      </div>
-                    ) : (
-                      <ul className="divide-y divide-gray-50">
-                        {prtList.map((prt) => {
-                          const sk = `${selectedEmp.emp_code}-${prt.year_st}-${prt.prt_no1}`;
-                          const mobileSent = sentSet.has(sk) || prt.mobile_send_yn === "Y";
-                          return (
-                            <li
-                              key={`${prt.year_st}-${prt.prt_no1}`}
-                              onClick={() => setSelectedPrt(prt)}
-                              className="px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-gray-50 active:bg-gray-100"
-                            >
-                              <div>
-                                <div className="text-sm font-medium text-gray-800">
-                                  기준일 {fmtDate(prt.year_stdate)} ~ 촉진일 {fmtDate(prt.hurry_date)}
-                                </div>
-                                <div className="flex gap-1.5 mt-1.5">
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${mobileSent ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
-                                    모바일 {mobileSent ? "전송완료" : "미전송"}
-                                  </span>
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${prt.send_yn === "Y" ? "bg-blue-100 text-blue-500" : "bg-gray-100 text-gray-400"}`}>
-                                    메일 {prt.send_yn === "Y" ? "전송완료" : "미전송"}
-                                  </span>
-                                </div>
-                              </div>
-                              <ChevronDown className="w-4 h-4 text-gray-300 -rotate-90 shrink-0" />
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </>
+                {/* 명세 없음 */}
+                {!prtLoading && prtList.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-3">
+                    <p className="text-sm">생성된 명세가 없습니다</p>
+                    <button
+                      onClick={() => { setCreateTarget(selectedEmp); setCreateForm({ yearStdate: "", hurryDate: "" }); }}
+                      className="text-sm text-primary font-medium px-4 py-2 rounded-lg border border-primary/30 hover:bg-primary/5"
+                    >
+                      명세 생성하기
+                    </button>
+                  </div>
                 )}
 
                 {/* 선택된 prt 상세 */}
                 {!prtLoading && selectedPrt && (
                   <>
-                    {/* 기준일/촉진일/전송상태 */}
-                    <div className="px-4 pt-3 pb-2 flex items-start justify-between">
-                      <div className="text-xs text-gray-500 space-y-0.5">
-                        <div>기준일: <span className="text-gray-700 font-medium">{fmtDate(selectedPrt.year_stdate)}</span></div>
-                        <div>촉진일: <span className="text-gray-700 font-medium">{fmtDate(selectedPrt.hurry_date)}</span></div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
+                    {/* 기준일/촉진일 — 콤보박스로 명세 전환 + 전송상태 */}
+                    <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
+                      <Select
+                        value={`${selectedPrt.year_st}-${selectedPrt.prt_no1}`}
+                        onValueChange={(v) => {
+                          const found = prtList.find((p) => `${p.year_st}-${p.prt_no1}` === v);
+                          if (found) { setSelectedPrt(found); setDeleteConfirm(false); }
+                        }}
+                      >
+                        <SelectTrigger className="h-auto border-0 shadow-none p-0 gap-1 w-auto focus:ring-0 [&>svg]:shrink-0">
+                          <div className="text-left text-xs text-gray-500 space-y-0.5">
+                            <div>기준일: <span className="text-gray-700 font-medium">{fmtDate(selectedPrt.year_stdate)}</span></div>
+                            <div>촉진일: <span className="text-gray-700 font-medium">{fmtDate(selectedPrt.hurry_date)}</span></div>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prtList.map((prt) => (
+                            <SelectItem key={`${prt.year_st}-${prt.prt_no1}`} value={`${prt.year_st}-${prt.prt_no1}`}>
+                              <span className="text-xs">기준일 {fmtDate(prt.year_stdate)} ~ 촉진일 {fmtDate(prt.hurry_date)}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${sent ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
                           모바일 {sent ? "전송완료" : "미전송"}
                         </span>
