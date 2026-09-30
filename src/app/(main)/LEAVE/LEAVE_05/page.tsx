@@ -2,10 +2,42 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Bell, X, BellOff, Loader2, FileText, ChevronDown } from "lucide-react";
+import { ChevronLeft, Bell, X, BellOff, Loader2, FileText, ChevronDown, CalendarDays } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { ko } from "date-fns/locale";
 import { useMenuStore } from "@/features/menu/use-menu-store";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
+
+// ── FilterDatePicker ─────────────────────────────────────────
+
+function FilterDatePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = value ? parseISO(value) : undefined;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="relative h-11 w-full border border-gray-200 rounded-lg bg-white overflow-hidden text-left focus:outline-none">
+          <div className="absolute inset-0 px-3 pr-8 flex flex-col justify-center gap-0.5">
+            <span className="text-[10px] text-gray-400 leading-none">{label}</span>
+            <span className="text-sm text-gray-700 leading-tight">{value.replace(/-/g, '.')}</span>
+          </div>
+          <CalendarDays className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="z-[300] w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => { if (date) { onChange(format(date, 'yyyy-MM-dd')); setOpen(false); } }}
+          locale={ko}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -103,6 +135,9 @@ export default function LeaveNotifyPage() {
   const defaultHurryDate  = new Date().toISOString().slice(0, 10);
   const [filterYearStdate, setFilterYearStdate] = useState(defaultYearStdate);
   const [filterHurryDate,  setFilterHurryDate]  = useState(defaultHurryDate);
+
+  // year 변경 시 기준일을 해당 연도 마지막 날로 자동 업데이트
+  useEffect(() => { setFilterYearStdate(`${year}-12-31`); }, [year]);
   const [filterDept, setFilterDept] = useState("");
   const [filterEmp, setFilterEmp]   = useState("");
   const [showEmpDropdown, setShowEmpDropdown]   = useState(false);
@@ -361,33 +396,8 @@ export default function LeaveNotifyPage() {
         {/* 기준일 / 촉진일 / 부서 / 사원 — 2열 그리드, floating label 스타일 통일 */}
         <div className="grid grid-cols-2 gap-2">
 
-          {/* 기준일: 커스텀 표시 + hidden date input (iOS 렌더링 충돌 방지) */}
-          <div className="relative h-11 border border-gray-200 rounded-lg bg-white overflow-hidden">
-            <div className="absolute inset-0 px-3 flex flex-col justify-center gap-0.5 pointer-events-none z-10">
-              <span className="text-[10px] text-gray-400 leading-none">기준일</span>
-              <span className="text-sm text-gray-700 leading-tight truncate">{filterYearStdate.replace(/-/g, '.')}</span>
-            </div>
-            <input
-              type="date"
-              value={filterYearStdate}
-              onChange={(e) => setFilterYearStdate(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-          </div>
-
-          {/* 촉진일 */}
-          <div className="relative h-11 border border-gray-200 rounded-lg bg-white overflow-hidden">
-            <div className="absolute inset-0 px-3 flex flex-col justify-center gap-0.5 pointer-events-none z-10">
-              <span className="text-[10px] text-gray-400 leading-none">촉진일</span>
-              <span className="text-sm text-gray-700 leading-tight truncate">{filterHurryDate.replace(/-/g, '.')}</span>
-            </div>
-            <input
-              type="date"
-              value={filterHurryDate}
-              onChange={(e) => setFilterHurryDate(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-          </div>
+          <FilterDatePicker label="기준일" value={filterYearStdate} onChange={setFilterYearStdate} />
+          <FilterDatePicker label="촉진일" value={filterHurryDate} onChange={setFilterHurryDate} />
 
           {/* 부서 — floating label 드롭다운 */}
           {canViewOtherDept && (

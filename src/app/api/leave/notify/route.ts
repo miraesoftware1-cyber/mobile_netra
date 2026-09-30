@@ -153,12 +153,23 @@ export async function POST(request: NextRequest) {
     [corpCode, empCode],
   );
 
+  const hurryText = info.hurry_date ? ` · 촉구일 ${fmtDate(info.hurry_date)}` : '';
+  const notifBody = `잔여 연차 ${info.year_reday}일${hurryText}`;
+
+  // 알림 이력 먼저 저장 → ID 획득 후 푸쉬 URL에 포함
+  const notifResult = await query<{ id: number }>(
+    `INSERT INTO mobile_notifications (company_code, emp_code, title, body, type, ref_data)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [companyCode, empCode, '연차 사용 촉구 알림', notifBody, 'leave_notify', JSON.stringify({ yearSt, prtNo1 })],
+  ).catch(() => null);
+
+  const notifId = notifResult?.rows?.[0]?.id ?? null;
+
   if (rows.length > 0) {
-    const hurryText = info.hurry_date ? ` · 촉구일 ${fmtDate(info.hurry_date)}` : '';
     const payload = {
       title: '연차 사용 촉구 알림',
-      body:  `잔여 연차 ${info.year_reday}일${hurryText}`,
-      url:   '/LEAVE/LEAVE_05',
+      body:  notifBody,
+      url:   notifId ? `/notifications?id=${notifId}` : '/notifications',
       tag:   `leave-notify-${empCode}-${yearSt}-${prtNo1}`,
     };
 
@@ -168,19 +179,6 @@ export async function POST(request: NextRequest) {
       ...silent.map((r) => sendPushNotification(r.subscription, { ...payload, silent: true })),
     ]);
   }
-
-  // 알림 이력 저장 (푸쉬 구독 여부 무관하게 항상 저장)
-  await query(
-    `INSERT INTO mobile_notifications (company_code, emp_code, title, body, type, ref_data)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
-      companyCode, empCode,
-      '연차 사용 촉구 알림',
-      `잔여 연차 ${info.year_reday}일${info.hurry_date ? ` · 촉구일 ${fmtDate(info.hurry_date)}` : ''}`,
-      'leave_notify',
-      JSON.stringify({ yearSt, prtNo1 }),
-    ],
-  ).catch(() => { /* 알림 저장 실패는 무시 */ });
 
   return NextResponse.json({ ok: true, pushed: rows.length > 0 });
 }

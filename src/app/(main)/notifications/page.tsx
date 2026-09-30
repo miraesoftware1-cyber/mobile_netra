@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Bell, BellOff, X } from "lucide-react";
@@ -25,10 +26,12 @@ function fmtFull(dateStr: string) {
 }
 
 export default function NotificationsPage() {
-  const companyCode = useAuthStore((s) => s.user?.companyCode ?? "");
-  const empCode     = useAuthStore((s) => s.user?.emp_code ?? "");
+  const companyCode  = useAuthStore((s) => s.user?.companyCode ?? "");
+  const empCode      = useAuthStore((s) => s.user?.emp_code ?? "");
   const { items, loading, setItems, markOneRead } = useNotificationStore();
   const [detail, setDetail] = useState<NotificationRow | null>(null);
+  const searchParams = useSearchParams();
+  const deepLinkId   = searchParams.get("id") ? Number(searchParams.get("id")) : null;
 
   // 탭 진입 시 최신 데이터 로드 (읽음 처리는 클릭 시에만)
   useEffect(() => {
@@ -41,6 +44,14 @@ export default function NotificationsPage() {
       })
       .catch(() => {});
   }, [companyCode, empCode, setItems]);
+
+  // 푸쉬 알림 클릭으로 진입 시 해당 알림 자동 팝업
+  useEffect(() => {
+    if (!deepLinkId || items.length === 0) return;
+    const target = items.find((n) => n.id === deepLinkId);
+    if (target) handleClick(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkId, items]);
 
   function handleClick(n: NotificationRow) {
     // 미확인이면 읽음 처리
