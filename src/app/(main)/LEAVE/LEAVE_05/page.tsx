@@ -81,7 +81,7 @@ function remanColor(days: number) {
 }
 
 const currentYear = new Date().getFullYear();
-const YEAR_OPTIONS = [String(currentYear - 1), String(currentYear)];
+const YEAR_OPTIONS = Array.from({ length: currentYear - 2019 }, (_, i) => String(currentYear - i));
 
 // ── Page ─────────────────────────────────────────────────────
 
@@ -99,14 +99,6 @@ export default function LeaveNotifyPage() {
 
   const [year, setYear]           = useState(String(currentYear - 1));
   const [remainOnly, setRemainOnly] = useState(true);
-
-  const defaultYearStdate = `${currentYear - 1}-12-31`;
-  const defaultHurryDate  = new Date().toISOString().slice(0, 10);
-  const [filterYearStdate, setFilterYearStdate] = useState(defaultYearStdate);
-  const [filterHurryDate,  setFilterHurryDate]  = useState(defaultHurryDate);
-
-  // year 변경 시 기준일을 해당 연도 마지막 날로 자동 업데이트
-  useEffect(() => { setFilterYearStdate(`${year}-12-31`); }, [year]);
   const [filterDept, setFilterDept] = useState("");
   const [filterEmp, setFilterEmp]   = useState("");
   const [showEmpDropdown, setShowEmpDropdown]   = useState(false);
@@ -127,11 +119,11 @@ export default function LeaveNotifyPage() {
   const [creating, setCreating] = useState(false);
 
   const [sentSet, setSentSet] = useState<Set<string>>(new Set());
-  const [selectedPrtIdx, setSelectedPrtIdx] = useState(0);
+  const [selectedPrt, setSelectedPrt] = useState<Prt | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => { setSelectedPrtIdx(0); setDeleteConfirm(false); }, [prtList]);
+  useEffect(() => { setSelectedPrt(null); setDeleteConfirm(false); }, [prtList]);
 
   // ── Fetch list ───────────────────────────────────────────
 
@@ -144,8 +136,7 @@ export default function LeaveNotifyPage() {
       const params = new URLSearchParams({
         companyCode, corpCode, mode: "LIST",
         year, dptCode: " ", empStatus: " ", empCode: " ",
-        yearStdate: toErpDate(filterYearStdate) || " ",
-        hurryDate:  toErpDate(filterHurryDate)  || " ",
+        yearStdate: " ", hurryDate: " ",
       });
       const res = await fetch(`/api/leave/notify?${params}`);
       const data: { items?: Employee[] } = await res.json();
@@ -155,7 +146,7 @@ export default function LeaveNotifyPage() {
     } finally {
       setListLoading(false);
     }
-  }, [companyCode, corpCode, year, filterYearStdate, filterHurryDate]);
+  }, [companyCode, corpCode, year]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
@@ -169,8 +160,7 @@ export default function LeaveNotifyPage() {
       const params = new URLSearchParams({
         companyCode, corpCode, mode: "DETAIL",
         year, dptCode: " ", empStatus: " ", empCode: emp.emp_code,
-        yearStdate: toErpDate(filterYearStdate) || " ",
-        hurryDate:  toErpDate(filterHurryDate)  || " ",
+        yearStdate: " ", hurryDate: " ",
       });
       const res = await fetch(`/api/leave/notify?${params}`);
       const data: { items?: Record<string, unknown>[] } = await res.json();
@@ -180,7 +170,7 @@ export default function LeaveNotifyPage() {
     } finally {
       setPrtLoading(false);
     }
-  }, [companyCode, corpCode, year, filterYearStdate, filterHurryDate]);
+  }, [companyCode, corpCode, year]);
 
   function handleSelectEmp(emp: Employee) {
     setSelectedEmp(emp);
@@ -205,31 +195,16 @@ export default function LeaveNotifyPage() {
         }),
       });
       if (res.ok) {
+        const emp = createTarget;
         setCreateTarget(null);
         setCreateForm({ yearStdate: "", hurryDate: "" });
         await fetchList();
+        setSelectedEmp(emp);
+        fetchDetail(emp);
       }
     } finally {
       setCreating(false);
     }
-  }
-
-  // 카드의 전송 버튼: DETAIL 로드 후 미전송 첫 명세 선택
-  async function handleCardSend(emp: Employee) {
-    if (!companyCode || !corpCode) return;
-    try {
-      const params = new URLSearchParams({
-        companyCode, corpCode, mode: "DETAIL",
-        year, dptCode: " ", empStatus: " ", empCode: emp.emp_code,
-        yearStdate: toErpDate(filterYearStdate) || " ",
-        hurryDate:  toErpDate(filterHurryDate)  || " ",
-      });
-      const res = await fetch(`/api/leave/notify?${params}`);
-      const data: { items?: Record<string, unknown>[] } = await res.json();
-      const prts = Array.isArray(data.items) ? data.items.map(parsePrt) : [];
-      const first = prts.find((p) => p.mobile_send_yn !== "Y");
-      if (first) setConfirmTarget({ emp, prtNo1: first.prt_no1, yearSt: first.year_st });
-    } catch { /* 무시 */ }
   }
 
   // ── Send ─────────────────────────────────────────────────
@@ -257,9 +232,7 @@ export default function LeaveNotifyPage() {
   }
 
   async function handleDelete() {
-    if (!selectedEmp || !companyCode || !corpCode) return;
-    const prt = prtList[selectedPrtIdx];
-    if (!prt) return;
+    if (!selectedEmp || !selectedPrt || !companyCode || !corpCode) return;
     setDeleting(true);
     try {
       const res = await fetch("/api/leave/notify", {
@@ -268,8 +241,8 @@ export default function LeaveNotifyPage() {
         body: JSON.stringify({
           companyCode, corpCode,
           empCode: selectedEmp.emp_code,
-          yearSt: prt.year_st,
-          prtNo1: prt.prt_no1,
+          yearSt: selectedPrt.year_st,
+          prtNo1: selectedPrt.prt_no1,
         }),
       });
       const data: { ok?: boolean; error?: string } = await res.json().catch(() => ({}));
@@ -277,10 +250,9 @@ export default function LeaveNotifyPage() {
         alert(data.error ?? "삭제에 실패했습니다.");
         return;
       }
-      const newList = prtList.filter((_, i) => i !== selectedPrtIdx);
-      setPrtList(newList);
+      setSelectedPrt(null);
       setDeleteConfirm(false);
-      if (newList.length === 0) setSelectedEmp(null);
+      setPrtList((prev) => prev.filter((p) => p.prt_no1 !== selectedPrt.prt_no1 || p.year_st !== selectedPrt.year_st));
       await fetchList();
     } finally {
       setDeleting(false);
@@ -362,11 +334,9 @@ export default function LeaveNotifyPage() {
           </span>
         </div>
 
-        {/* 기준일 / 촉진일 / 부서 / 사원 — 2열 그리드, floating label 스타일 통일 */}
+        {/* 부서 / 사원 */}
+        {(canViewOtherDept || canViewOtherEmp) && (
         <div className="grid grid-cols-2 gap-2">
-
-          <DatePickerField label="기준일" value={filterYearStdate} onChange={setFilterYearStdate} />
-          <DatePickerField label="촉진일" value={filterHurryDate} onChange={setFilterHurryDate} />
 
           {/* 부서 — floating label 드롭다운 */}
           {canViewOtherDept && (
@@ -451,6 +421,7 @@ export default function LeaveNotifyPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* 목록 */}
@@ -497,29 +468,21 @@ export default function LeaveNotifyPage() {
                 </div>
               </button>
 
-              {emp.year_reday > 0 && (
-                <div className="mt-3">
-                  {emp.prt_count === 0 ? (
-                    <button
-                      onClick={() => {
-                        setCreateTarget(emp);
-                        setCreateForm({ yearStdate: filterYearStdate, hurryDate: filterHurryDate });
-                      }}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 active:bg-gray-100"
-                    >
-                      명세 생성하기
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleSelectEmp(emp)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/40 text-primary text-sm font-medium hover:bg-primary/5 active:bg-primary/10"
-                    >
-                      <FileText className="w-4 h-4" />
-                      명세 보기
-                    </button>
-                  )}
-                </div>
-              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => handleSelectEmp(emp)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-primary/40 text-primary text-sm font-medium hover:bg-primary/5 active:bg-primary/10"
+                >
+                  <FileText className="w-4 h-4" />
+                  명세 보기
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCreateTarget(emp); setCreateForm({ yearStdate: "", hurryDate: "" }); }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 active:bg-gray-100"
+                >
+                  명세 생성하기
+                </button>
+              </div>
             </div>
           );
         })}
@@ -616,7 +579,6 @@ export default function LeaveNotifyPage() {
 
       {/* 명세 상세 모달 */}
       {selectedEmp && (() => {
-        const selectedPrt = prtList[selectedPrtIdx] ?? null;
         const sentKey = selectedPrt ? `${selectedEmp.emp_code}-${selectedPrt.year_st}-${selectedPrt.prt_no1}` : "";
         const sent = selectedPrt ? (sentSet.has(sentKey) || selectedPrt.mobile_send_yn === "Y") : false;
         const canSend = selectedPrt && !sent && selectedEmp.year_reday > 0
@@ -657,23 +619,15 @@ export default function LeaveNotifyPage() {
                 ))}
               </div>
 
-              {/* 탭 (명세 2개 이상일 때) */}
-              {prtList.length > 1 && (
-                <div className="shrink-0 flex border-b border-gray-100 overflow-x-auto">
-                  {prtList.map((prt, i) => (
-                    <button
-                      key={`${prt.year_st}-${prt.prt_no1}`}
-                      onClick={() => { setSelectedPrtIdx(i); setDeleteConfirm(false); }}
-                      className={`shrink-0 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                        i === selectedPrtIdx
-                          ? "border-primary text-primary"
-                          : "border-transparent text-gray-400 hover:text-gray-600"
-                      }`}
-                    >
-                      {fmtDate(prt.year_stdate)}
-                    </button>
-                  ))}
-                </div>
+              {/* prt 선택 시: 목록으로 돌아가기 버튼 */}
+              {selectedPrt && (
+                <button
+                  onClick={() => { setSelectedPrt(null); setDeleteConfirm(false); }}
+                  className="shrink-0 px-4 py-2 border-b border-gray-100 flex items-center gap-1 text-xs text-gray-500 hover:bg-gray-50"
+                >
+                  <ChevronDown className="w-3.5 h-3.5 rotate-90" />
+                  목록으로
+                </button>
               )}
 
               {/* 명세 내용 */}
@@ -684,13 +638,53 @@ export default function LeaveNotifyPage() {
                   </div>
                 )}
 
-                {!prtLoading && prtList.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-10 text-gray-400">
-                    <p className="text-sm">생성된 명세가 없습니다</p>
-                    <p className="text-xs mt-1">ERP에서 명세를 먼저 생성해주세요</p>
-                  </div>
+                {/* 명세 리스트 (prt 미선택 시) */}
+                {!prtLoading && !selectedPrt && (
+                  <>
+                    {prtList.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-3">
+                        <p className="text-sm">생성된 명세가 없습니다</p>
+                        <button
+                          onClick={() => { setCreateTarget(selectedEmp); setCreateForm({ yearStdate: "", hurryDate: "" }); }}
+                          className="text-sm text-primary font-medium px-4 py-2 rounded-lg border border-primary/30 hover:bg-primary/5"
+                        >
+                          명세 생성하기
+                        </button>
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-gray-50">
+                        {prtList.map((prt) => {
+                          const sk = `${selectedEmp.emp_code}-${prt.year_st}-${prt.prt_no1}`;
+                          const mobileSent = sentSet.has(sk) || prt.mobile_send_yn === "Y";
+                          return (
+                            <li
+                              key={`${prt.year_st}-${prt.prt_no1}`}
+                              onClick={() => setSelectedPrt(prt)}
+                              className="px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-gray-50 active:bg-gray-100"
+                            >
+                              <div>
+                                <div className="text-sm font-medium text-gray-800">
+                                  기준일 {fmtDate(prt.year_stdate)} ~ 촉진일 {fmtDate(prt.hurry_date)}
+                                </div>
+                                <div className="flex gap-1.5 mt-1.5">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${mobileSent ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
+                                    모바일 {mobileSent ? "전송완료" : "미전송"}
+                                  </span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${prt.send_yn === "Y" ? "bg-blue-100 text-blue-500" : "bg-gray-100 text-gray-400"}`}>
+                                    메일 {prt.send_yn === "Y" ? "전송완료" : "미전송"}
+                                  </span>
+                                </div>
+                              </div>
+                              <ChevronDown className="w-4 h-4 text-gray-300 -rotate-90 shrink-0" />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </>
                 )}
 
+                {/* 선택된 prt 상세 */}
                 {!prtLoading && selectedPrt && (
                   <>
                     {/* 기준일/촉진일/전송상태 */}
@@ -710,7 +704,7 @@ export default function LeaveNotifyPage() {
                     </div>
 
                     {/* 월별 데이터 */}
-                    <div className="divide-y divide-gray-50 px-0">
+                    <div className="divide-y divide-gray-50">
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
                         const entry = selectedPrt.months.find((x) => x.m === m);
                         return (
@@ -733,34 +727,26 @@ export default function LeaveNotifyPage() {
                 )}
               </div>
 
-              {/* 하단 버튼 */}
+              {/* 하단 버튼 (prt 선택 시에만) */}
               {!prtLoading && selectedPrt && (
                 <div className="shrink-0 border-t border-gray-100 px-4 py-3 flex flex-col gap-2">
                   {deleteConfirm && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-100">
                       <span className="text-xs text-red-500 flex-1">삭제하면 복구할 수 없습니다. 계속할까요?</span>
-                      <button
-                        onClick={() => setDeleteConfirm(false)}
-                        disabled={deleting}
-                        className="text-xs text-gray-500 font-medium px-2 py-1 rounded-lg hover:bg-gray-100 disabled:opacity-50"
-                      >
+                      <button onClick={() => setDeleteConfirm(false)} disabled={deleting}
+                        className="text-xs text-gray-500 font-medium px-2 py-1 rounded-lg hover:bg-gray-100 disabled:opacity-50">
                         취소
                       </button>
-                      <button
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className="text-xs text-white font-medium px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 flex items-center gap-1"
-                      >
+                      <button onClick={handleDelete} disabled={deleting}
+                        className="text-xs text-white font-medium px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 flex items-center gap-1">
                         {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
                         삭제
                       </button>
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setDeleteConfirm((v) => !v)}
-                      className="flex-1 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 active:bg-red-100"
-                    >
+                    <button onClick={() => setDeleteConfirm((v) => !v)}
+                      className="flex-1 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 active:bg-red-100">
                       삭제하기
                     </button>
                     {canSend ? (
