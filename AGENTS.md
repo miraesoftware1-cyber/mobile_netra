@@ -5,6 +5,31 @@
 - always use client component for all components. (use `use client` directive)
 - always use promise for page.tsx params props.
 - use valid picsum.photos stock image for placeholder image
+- **페이지에 스크롤 리스트가 있으면 반드시 아래 iOS 스크롤 패턴을 사용할 것** (h-screen/h-full 사용 금지)
+
+## iOS 스크롤 패턴 (리스트가 있는 모든 페이지 필수)
+
+메인 레이아웃(`(main)/layout.tsx`)이 `flex h-0 min-h-0 flex-1` 구조이므로, 그 안의 페이지도 동일한 패턴을 따라야 iOS에서 리스트 끝까지 스크롤된다.
+
+```tsx
+// ✅ 올바른 구조
+<div className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden bg-gray-50">
+  <header className="shrink-0 ...">...</header>
+  <div className="shrink-0 ...">필터 영역</div>
+
+  {/* 스크롤 리스트 */}
+  <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-3 pb-6">
+    ...
+  </div>
+</div>
+
+// ❌ 금지 패턴
+<div className="flex flex-col h-screen ...">   // h-screen 금지
+<div className="flex flex-col h-[100dvh] ..."> // h-dvh 금지
+<div className="flex-1 overflow-y-auto ...">   // min-h-0 빠지면 iOS에서 스크롤 안 됨
+```
+
+참고 구현: `src/app/(main)/SCH/SCH_02/page.tsx`
 
 ## Library
 
