@@ -52,6 +52,7 @@ const PARENT_LABEL_MAP: Record<string, string> = {
   MOBILE_B: "연차/휴가",
   MOBILE_C: "지출결의",
   MOBILE_D: "승인관리",
+  MOBILE_E: "관리자",
 };
 
 function groupIcon(menuId: string): LucideIcon {
