@@ -1,8 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -28,6 +26,14 @@ function fmtFull(dateStr: string) {
 }
 
 export default function NotificationsPage() {
+  return (
+    <Suspense>
+      <NotificationsContent />
+    </Suspense>
+  );
+}
+
+function NotificationsContent() {
   const companyCode  = useAuthStore((s) => s.user?.companyCode ?? "");
   const empCode      = useAuthStore((s) => s.user?.emp_code ?? "");
   const { items, loading, setItems, markOneRead } = useNotificationStore();
