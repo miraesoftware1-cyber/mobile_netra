@@ -49,10 +49,7 @@ BEGIN TRY
             (SELECT COUNT(1) FROM HRM_NW_PRT p2
              WHERE p2.corp_code = x.corp_code
                AND p2.emp_code  = x.emp_code
-               AND (LTRIM(ISNULL(@YEAR_STDATE, '')) = '' OR p2.year_stdate = @YEAR_STDATE)
-               AND (LTRIM(ISNULL(@HURRY_DATE,  '')) = '' OR p2.hurry_date  = @HURRY_DATE)
-               AND (LTRIM(ISNULL(@HURRY_DATE,  '')) <> '' OR LEFT(p2.hurry_date, 4) = @YEAR)
-               AND p2.hurry_date >= p2.year_stdate)                        AS prt_count
+               AND p2.year_st   = @YEAR)                                   AS prt_count
         FROM (
             SELECT
                 e.corp_code,
@@ -121,10 +118,9 @@ BEGIN TRY
         FROM HRM_NW_PRT p
         WHERE p.corp_code = @CORP_CODE
           AND p.emp_code  = @EMP_CODE
+          AND p.year_st   = @YEAR
           AND (LTRIM(ISNULL(@YEAR_STDATE, '')) = '' OR p.year_stdate = @YEAR_STDATE)
           AND (LTRIM(ISNULL(@HURRY_DATE,  '')) = '' OR p.hurry_date  = @HURRY_DATE)
-          AND (LTRIM(ISNULL(@HURRY_DATE,  '')) <> '' OR LEFT(p.hurry_date, 4) = @YEAR)
-          AND p.hurry_date >= p.year_stdate
         ORDER BY p.prt_no1
     END
 

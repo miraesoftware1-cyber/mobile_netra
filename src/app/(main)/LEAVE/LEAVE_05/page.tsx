@@ -81,6 +81,7 @@ function remanColor(days: number) {
 }
 
 const currentYear = new Date().getFullYear();
+const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
 const YEAR_OPTIONS = Array.from({ length: currentYear - 2019 }, (_, i) => String(currentYear - i));
 
 // ── Page ─────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ export default function LeaveNotifyPage() {
   const corpCode    = user?.corp_code   ?? "";
   const userId      = user?.user_id     ?? "";
 
-  const [year, setYear]           = useState(String(currentYear - 1));
+  const [year, setYear]           = useState(String(currentYear));
   const [remainOnly, setRemainOnly] = useState(true);
   const [filterDept, setFilterDept] = useState("");
   const [filterEmp, setFilterEmp]   = useState("");
@@ -123,9 +124,25 @@ export default function LeaveNotifyPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // prt 로드 완료 시 가장 최근 명세 자동 선택
+  // prt 로드 완료 시 촉진일이 오늘과 가장 가까운 명세 자동 선택
   useEffect(() => {
-    setSelectedPrt(prtList.length > 0 ? prtList[0] : null);
+    if (prtList.length === 0) {
+      setSelectedPrt(null);
+    } else {
+      const today = Date.now();
+      const parseHurry = (d: string) => {
+        if (!d || d.length < 8) return null;
+        return new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)).getTime();
+      };
+      const closest = prtList.reduce((best, cur) => {
+        const bTime = parseHurry(best.hurry_date);
+        const cTime = parseHurry(cur.hurry_date);
+        if (!cTime) return best;
+        if (!bTime) return cur;
+        return Math.abs(cTime - today) < Math.abs(bTime - today) ? cur : best;
+      });
+      setSelectedPrt(closest);
+    }
     setDeleteConfirm(false);
   }, [prtList]);
 
@@ -168,7 +185,8 @@ export default function LeaveNotifyPage() {
       });
       const res = await fetch(`/api/leave/notify?${params}`);
       const data: { items?: Record<string, unknown>[] } = await res.json();
-      setPrtList(Array.isArray(data.items) ? data.items.map(parsePrt) : []);
+      const all = Array.isArray(data.items) ? data.items.map(parsePrt) : [];
+      setPrtList(all);
     } catch {
       setPrtList([]);
     } finally {
@@ -447,6 +465,11 @@ export default function LeaveNotifyPage() {
                       {emp.emp_position_name && (
                         <span className="text-xs text-gray-400">{emp.emp_position_name}</span>
                       )}
+                      {emp.prt_count > 0 ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">명세 {emp.prt_count}건</span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">명세 없음</span>
+                      )}
                     </div>
                     <span className="text-xs text-gray-400 mt-0.5 block">{emp.dpt_name}</span>
                   </div>
@@ -481,7 +504,7 @@ export default function LeaveNotifyPage() {
                   명세 보기
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setCreateTarget(emp); setCreateForm({ yearStdate: "", hurryDate: "" }); }}
+                  onClick={(e) => { e.stopPropagation(); setCreateTarget(emp); setCreateForm({ yearStdate: `${year}-12-31`, hurryDate: todayStr }); }}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 active:bg-gray-100"
                 >
                   명세 생성하기
@@ -636,7 +659,7 @@ export default function LeaveNotifyPage() {
                   <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-3">
                     <p className="text-sm">생성된 명세가 없습니다</p>
                     <button
-                      onClick={() => { setCreateTarget(selectedEmp); setCreateForm({ yearStdate: "", hurryDate: "" }); }}
+                      onClick={() => { setCreateTarget(selectedEmp); setCreateForm({ yearStdate: `${year}-12-31`, hurryDate: todayStr }); }}
                       className="text-sm text-primary font-medium px-4 py-2 rounded-lg border border-primary/30 hover:bg-primary/5"
                     >
                       명세 생성하기
@@ -662,7 +685,7 @@ export default function LeaveNotifyPage() {
                             <div>촉진일: <span className="text-gray-700 font-medium">{fmtDate(selectedPrt.hurry_date)}</span></div>
                           </div>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-[300]">
                           {prtList.map((prt) => (
                             <SelectItem key={`${prt.year_st}-${prt.prt_no1}`} value={`${prt.year_st}-${prt.prt_no1}`}>
                               <span className="text-xs">기준일 {fmtDate(prt.year_stdate)} ~ 촉진일 {fmtDate(prt.hurry_date)}</span>
