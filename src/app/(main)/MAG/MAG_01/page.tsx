@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Search, ChevronDown, Smartphone, Wifi, WifiOff, X, BanIcon } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
@@ -75,6 +75,11 @@ export default function MobileRecipientsPage() {
     }
   }, [companyCode, corpCode]);
 
+  useEffect(() => {
+    fetch();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleSearch() {
     setFilterDept("");
     setFilterName("");
@@ -87,7 +92,7 @@ export default function MobileRecipientsPage() {
   const subOk     = (e: Employee) => e.has_subscription;
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-[100dvh] bg-gray-50">
       {/* 헤더 */}
       <header className="shrink-0 bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3">
         <button

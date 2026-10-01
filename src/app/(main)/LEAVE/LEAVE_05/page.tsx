@@ -314,7 +314,7 @@ export default function LeaveNotifyPage() {
   // ── Render ───────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-[100dvh] bg-gray-50">
       {/* 헤더 */}
       <header className="shrink-0 bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3">
         <button
