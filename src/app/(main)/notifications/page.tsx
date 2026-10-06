@@ -154,8 +154,8 @@ function LeaveNotifySheet({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 top-[5%] z-50 flex flex-col bg-white rounded-t-2xl shadow-xl">
+      <div className="fixed inset-0 z-[60] bg-black/50" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 top-[5%] z-[70] flex flex-col bg-white rounded-t-2xl shadow-xl">
 
         {/* 시트 헤더 */}
         <div className="shrink-0 px-5 py-4 border-b border-gray-100 flex items-center justify-between">
