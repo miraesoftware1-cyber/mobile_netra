@@ -155,7 +155,7 @@ function LeaveNotifySheet({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 top-[5%] z-50 flex flex-col bg-white rounded-t-2xl shadow-xl overflow-hidden">
+      <div className="fixed inset-x-0 bottom-0 top-[5%] z-50 flex flex-col bg-white rounded-t-2xl shadow-xl">
 
         {/* 시트 헤더 */}
         <div className="shrink-0 px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -191,7 +191,7 @@ function LeaveNotifySheet({
           {state.status === "ok" && (() => {
             const { prt, emp } = state;
             return (
-              <div className="px-5 py-6 space-y-5">
+              <div className="px-5 pt-6 pb-12 space-y-5">
 
                 {/* 문서 제목 */}
                 <div className="border-2 border-gray-700 rounded-lg py-3 text-center">
