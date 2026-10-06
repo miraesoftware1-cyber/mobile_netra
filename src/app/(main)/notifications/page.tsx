@@ -60,6 +60,11 @@ function fmtDate(d: string) {
   return `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}`;
 }
 
+function fmtDateDot(d: string) {
+  if (!d || d.length < 8) return d;
+  return `${d.slice(0, 4)}. ${d.slice(4, 6)}. ${d.slice(6, 8)}`;
+}
+
 function parsePrt(raw: Record<string, unknown>): LeavePrt {
   return {
     prt_no1:     Number(raw.prt_no1 ?? 0),
@@ -164,7 +169,7 @@ function LeaveNotifySheet({
         </div>
 
         {/* 본문 */}
-        <div className="flex-1 overflow-y-auto overscroll-y-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
           {state.status === "loading" && (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="w-6 h-6 text-primary animate-spin" />
@@ -285,12 +290,17 @@ function LeaveNotifySheet({
                 </div>
 
                 {/* 안내 문구 */}
-                <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-100">
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    귀하에게는 위와 같이 미사용 연차 유급 휴가가 있습니다.
-                    근로기준법 제61조에 따라 사용자는 연차 유급 휴가의 사용을 촉진하기 위하여
-                    아래와 같이 연차 유급 휴가를 적극적으로 사용해 주시기 바랍니다.
-                  </p>
+                <div className="border border-gray-300 rounded-lg px-4 py-3">
+                  <ol className="list-decimal list-outside pl-4 space-y-2 text-xs text-gray-700 leading-relaxed">
+                    <li>
+                      귀하께서는 {fmtDateDot(prt.year_stdate)} 현재까지 사용하지 않은 연차 유급휴가가{" "}
+                      <span className="font-semibold">{prt.year_reday} 일</span>임을 알려드립니다.
+                    </li>
+                    <li>
+                      회사의 사용촉구에도 연차 유급휴가를 사용하지 않을 경우에는 연차휴가 미사용수당이
+                      지급되지 않음을 알려드립니다. 연차 유급 휴가를 적극적으로 사용해 주시기 바랍니다.
+                    </li>
+                  </ol>
                 </div>
 
                 {/* 날짜 + 회사명 */}
