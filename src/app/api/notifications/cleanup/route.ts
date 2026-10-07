@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db/postgres';
 
-async function runCleanup(companyCode?: string) {
-  const whereCompany = companyCode ? `AND n.company_code = $1` : '';
+type TypeCount = { type: string; count: number };
+
+// 삭제 대상 미리 조회 (preview=true)
+async function previewCleanup(companyCode?: string): Promise<TypeCount[]> {
+  const whereCompany = companyCode ? 'AND n.company_code = $1' : '';
+  const params = companyCode ? [companyCode] : [];
+
+  const result = await query<{ type: string; count: string }>(
+    `SELECT n.type, COUNT(*) AS count
+     FROM mobile_notifications n
+     JOIN notification_retention_rules r
+       ON n.company_code = r.company_code AND n.type = r.type
+     WHERE r.retention_days IS NOT NULL
+       AND n.sent_at < NOW() - (r.retention_days || ' days')::INTERVAL
+       ${whereCompany}
+     GROUP BY n.type`,
+    params,
+  );
+
+  return result.rows.map((r) => ({ type: r.type, count: Number(r.count) }));
+}
+
+async function runCleanup(companyCode?: string): Promise<number> {
+  const whereCompany = companyCode ? 'AND n.company_code = $1' : '';
   const params = companyCode ? [companyCode] : [];
 
   const result = await query<{ count: string }>(
@@ -38,10 +60,17 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ ok: true, deleted });
 }
 
-// POST — 관리자 페이지 "지금 정리 실행" 버튼
+// POST — 관리자 페이지
+// body.preview === true 면 삭제 대상 건수만 반환 (실제 삭제 없음)
+// body.preview === false 면 실제 삭제 실행
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const companyCode = typeof body.companyCode === 'string' ? body.companyCode : undefined;
+
+  if (body.preview === true) {
+    const targets = await previewCleanup(companyCode);
+    return NextResponse.json({ ok: true, targets });
+  }
 
   const deleted = await runCleanup(companyCode);
   return NextResponse.json({ ok: true, deleted });

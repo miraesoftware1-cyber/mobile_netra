@@ -2,22 +2,26 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Trash2, Save, Bell, Loader2, Play } from "lucide-react";
+import { ChevronLeft, Trash2, Save, Bell, Loader2, Play, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 
-// ── 알림 타입 목록 (코드에서 실제 사용하는 타입) ────────────────
+// ── 알림 타입 목록 ─────────────────────────────────────────────
 const NOTIFICATION_TYPES: { type: string; label: string }[] = [
   { type: "leave_notify", label: "연차사용 촉진 알림" },
   { type: "general",      label: "일반 알림" },
 ];
+
+const TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  NOTIFICATION_TYPES.map(({ type, label }) => [type, label]),
+);
 
 const PRESET_DAYS = [7, 14, 30, 60, 90, 180] as const;
 
 // ── Types ─────────────────────────────────────────────────────
 
 type RuleState = {
-  retention_days: number | null;  // null = 삭제 안 함
-  custom: boolean;                // 직접 입력 모드
+  retention_days: number | null;
+  custom: boolean;
   customValue: string;
 };
 
@@ -25,6 +29,8 @@ type ApiRule = {
   type: string;
   retention_days: number | null;
 };
+
+type PreviewTarget = { type: string; count: number };
 
 // ── Page ──────────────────────────────────────────────────────
 
@@ -38,8 +44,13 @@ export default function NotificationRetentionPage() {
   const [counts, setCounts]   = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
-  const [running, setRunning] = useState(false);
   const [lastResult, setLastResult] = useState<{ deleted: number; at: string } | null>(null);
+
+  // 확인 팝업
+  const [previewing, setPreviewing]   = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [previewTargets, setPreviewTargets] = useState<PreviewTarget[]>([]);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchRules = useCallback(async () => {
     if (!companyCode) return;
@@ -60,7 +71,6 @@ export default function NotificationRetentionPage() {
       setRules(initial);
       setCounts(data.counts ?? {});
     } catch {
-      // 로드 실패 시 기본값
       const initial: Record<string, RuleState> = {};
       for (const { type } of NOTIFICATION_TYPES) {
         initial[type] = { retention_days: null, custom: false, customValue: "" };
@@ -113,25 +123,47 @@ export default function NotificationRetentionPage() {
     }
   }
 
-  async function handleRunNow() {
+  // 1단계: 미리 보기 조회 후 팝업
+  async function handleRunNowClick() {
     if (!companyCode) return;
-    setRunning(true);
+    setPreviewing(true);
     try {
       const res = await fetch("/api/notifications/cleanup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyCode }),
+        body: JSON.stringify({ companyCode, preview: true }),
+      });
+      const data: { targets?: PreviewTarget[] } = await res.json();
+      setPreviewTargets(data.targets ?? []);
+      setConfirmOpen(true);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  // 2단계: 팝업 확인 후 실제 삭제
+  async function handleConfirmDelete() {
+    if (!companyCode) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/notifications/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyCode, preview: false }),
       });
       const data: { deleted?: number } = await res.json();
       setLastResult({
         deleted: data.deleted ?? 0,
         at: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
       });
+      setConfirmOpen(false);
       await fetchRules();
     } finally {
-      setRunning(false);
+      setDeleting(false);
     }
   }
+
+  const totalPreview = previewTargets.reduce((s, t) => s + t.count, 0);
 
   return (
     <div className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden bg-gray-50">
@@ -167,7 +199,6 @@ export default function NotificationRetentionPage() {
 
               return (
                 <div key={type} className="bg-white rounded-xl border border-gray-100 p-4 space-y-3">
-                  {/* 타입 헤더 */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Bell className="w-4 h-4 text-primary" />
@@ -178,7 +209,6 @@ export default function NotificationRetentionPage() {
                     </span>
                   </div>
 
-                  {/* 프리셋 버튼 */}
                   <div className="flex flex-wrap gap-1.5">
                     {PRESET_DAYS.map((d) => (
                       <button
@@ -215,7 +245,6 @@ export default function NotificationRetentionPage() {
                     </button>
                   </div>
 
-                  {/* 직접 입력 */}
                   {rule.custom && (
                     <div className="flex items-center gap-2">
                       <input
@@ -230,7 +259,6 @@ export default function NotificationRetentionPage() {
                     </div>
                   )}
 
-                  {/* 현재 설정 요약 */}
                   <p className="text-xs text-gray-400">
                     {rule.retention_days != null
                       ? `${rule.retention_days}일이 지난 알림 자동 삭제`
@@ -240,7 +268,6 @@ export default function NotificationRetentionPage() {
               );
             })}
 
-            {/* 실행 결과 */}
             {lastResult && (
               <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 flex items-center gap-2">
                 <Trash2 className="w-4 h-4 text-green-500 shrink-0" />
@@ -254,26 +281,78 @@ export default function NotificationRetentionPage() {
         )}
       </div>
 
-      {/* 하단 버튼 */}
-      {!loading && (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3 flex gap-2">
-          <button
-            onClick={handleRunNow}
-            disabled={running || saving}
-            className="flex items-center gap-1.5 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium disabled:opacity-50"
-          >
-            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            지금 정리 실행
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || running}
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-primary text-white text-sm font-medium disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            저장
-          </button>
-        </div>
+      {/* 하단 버튼 — 항상 렌더링해서 iOS flex 레이아웃 안정화 */}
+      <div className={`shrink-0 border-t border-gray-100 bg-white px-4 py-3 flex gap-2 ${loading ? "invisible" : ""}`}>
+        <button
+          onClick={handleRunNowClick}
+          disabled={loading || previewing || saving || deleting}
+          className="flex items-center gap-1.5 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium disabled:opacity-50"
+        >
+          {previewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+          지금 정리 실행
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={loading || saving || previewing || deleting}
+          className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-primary text-white text-sm font-medium disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          저장
+        </button>
+      </div>
+
+      {/* 삭제 확인 팝업 */}
+      {confirmOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => !deleting && setConfirmOpen(false)} />
+          <div className="fixed inset-x-8 top-1/2 -translate-y-1/2 z-50 bg-white rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-50 mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-center font-semibold text-gray-900 mb-1">알림 정리 실행</h3>
+
+            {totalPreview === 0 ? (
+              <p className="text-center text-sm text-gray-500 mt-2 mb-6">삭제할 알림이 없습니다.</p>
+            ) : (
+              <>
+                <p className="text-center text-sm text-gray-500 mb-3">다음 알림이 삭제됩니다.</p>
+                <div className="bg-gray-50 rounded-xl px-4 py-3 mb-4 space-y-1.5">
+                  {previewTargets.map((t) => (
+                    <div key={t.type} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">{TYPE_LABEL[t.type] ?? t.type}</span>
+                      <span className="font-semibold text-red-500">{t.count.toLocaleString()}건</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-gray-200 pt-1.5 flex items-center justify-between text-sm font-semibold">
+                    <span className="text-gray-700">합계</span>
+                    <span className="text-red-500">{totalPreview.toLocaleString()}건</span>
+                  </div>
+                </div>
+                <p className="text-center text-xs text-gray-400 mb-6">삭제된 알림은 복구할 수 없습니다.</p>
+              </>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 font-medium disabled:opacity-50"
+              >
+                취소
+              </button>
+              {totalPreview > 0 && (
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  삭제
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
