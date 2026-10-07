@@ -44,6 +44,7 @@ export default function NotificationRetentionPage() {
   const [counts, setCounts]   = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
   const [lastResult, setLastResult] = useState<{ deleted: number; at: string } | null>(null);
 
   // 확인 팝업
@@ -118,6 +119,8 @@ export default function NotificationRetentionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyCode, userId, rules: ruleList }),
       });
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 2500);
     } finally {
       setSaving(false);
     }
@@ -300,6 +303,13 @@ export default function NotificationRetentionPage() {
           저장
         </button>
       </div>
+
+      {/* 저장 완료 토스트 */}
+      {savedToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">
+          저장되었습니다.
+        </div>
+      )}
 
       {/* 삭제 확인 팝업 */}
       {confirmOpen && (
