@@ -33,7 +33,13 @@ export async function GET(request: NextRequest) {
   const countMap = Object.fromEntries(countResult.rows.map((r) => [r.type, Number(r.cnt)]));
   const rulesMap = Object.fromEntries(rulesResult.rows.map((r) => [r.type, r]));
 
-  return NextResponse.json({ rules: rulesMap, counts: countMap });
+  // mobile_notifications + retention_rules 두 테이블의 타입 union
+  const types = [...new Set([
+    ...countResult.rows.map((r) => r.type),
+    ...rulesResult.rows.map((r) => r.type),
+  ])].sort();
+
+  return NextResponse.json({ rules: rulesMap, counts: countMap, types });
 }
 
 // PUT: 삭제 주기 저장 (upsert)

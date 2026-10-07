@@ -5,15 +5,15 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Trash2, Save, Bell, Loader2, Play, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 
-// ── 알림 타입 목록 ─────────────────────────────────────────────
-const NOTIFICATION_TYPES: { type: string; label: string }[] = [
-  { type: "leave_notify", label: "연차사용 촉진 알림" },
-  { type: "general",      label: "일반 알림" },
-];
+// 알려진 타입 레이블 (DB에 없는 타입은 type 문자열 그대로 표시)
+const KNOWN_LABELS: Record<string, string> = {
+  leave_notify: "연차사용 촉진 알림",
+  general:      "일반 알림",
+};
 
-const TYPE_LABEL: Record<string, string> = Object.fromEntries(
-  NOTIFICATION_TYPES.map(({ type, label }) => [type, label]),
-);
+function typeLabel(type: string) {
+  return KNOWN_LABELS[type] ?? type;
+}
 
 const PRESET_DAYS = [7, 14, 30, 60, 90, 180] as const;
 
@@ -40,6 +40,7 @@ export default function NotificationRetentionPage() {
   const companyCode = user?.companyCode ?? "";
   const userId      = user?.user_id     ?? "";
 
+  const [types, setTypes]     = useState<string[]>([]);
   const [rules, setRules]     = useState<Record<string, RuleState>>({});
   const [counts, setCounts]   = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -58,10 +59,11 @@ export default function NotificationRetentionPage() {
     setLoading(true);
     try {
       const res  = await fetch(`/api/notifications/retention?companyCode=${companyCode}`);
-      const data: { rules: Record<string, ApiRule>; counts: Record<string, number> } = await res.json();
+      const data: { rules: Record<string, ApiRule>; counts: Record<string, number>; types: string[] } = await res.json();
 
+      const dynamicTypes = data.types ?? [];
       const initial: Record<string, RuleState> = {};
-      for (const { type } of NOTIFICATION_TYPES) {
+      for (const type of dynamicTypes) {
         const saved = data.rules[type];
         initial[type] = {
           retention_days: saved?.retention_days ?? null,
@@ -69,14 +71,12 @@ export default function NotificationRetentionPage() {
           customValue: saved?.retention_days != null ? String(saved.retention_days) : "",
         };
       }
+      setTypes(dynamicTypes);
       setRules(initial);
       setCounts(data.counts ?? {});
     } catch {
-      const initial: Record<string, RuleState> = {};
-      for (const { type } of NOTIFICATION_TYPES) {
-        initial[type] = { retention_days: null, custom: false, customValue: "" };
-      }
-      setRules(initial);
+      setTypes([]);
+      setRules({});
     } finally {
       setLoading(false);
     }
@@ -110,7 +110,7 @@ export default function NotificationRetentionPage() {
     if (!companyCode || !userId) return;
     setSaving(true);
     try {
-      const ruleList = NOTIFICATION_TYPES.map(({ type }) => ({
+      const ruleList = types.map((type) => ({
         type,
         retention_days: rules[type]?.retention_days ?? null,
       }));
@@ -196,7 +196,15 @@ export default function NotificationRetentionPage() {
           </div>
         ) : (
           <>
-            {NOTIFICATION_TYPES.map(({ type, label }) => {
+            {types.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <Bell className="w-10 h-10 mb-3 opacity-30" />
+                <p className="text-sm">쌓인 알림이 없습니다</p>
+              </div>
+            )}
+
+            {types.map((type) => {
+              const label = typeLabel(type);
               const rule  = rules[type] ?? { retention_days: null, custom: false, customValue: "" };
               const count = counts[type] ?? 0;
 
@@ -329,7 +337,7 @@ export default function NotificationRetentionPage() {
                 <div className="bg-gray-50 rounded-xl px-4 py-3 mb-4 space-y-1.5">
                   {previewTargets.map((t) => (
                     <div key={t.type} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">{TYPE_LABEL[t.type] ?? t.type}</span>
+                      <span className="text-gray-600">{typeLabel(t.type)}</span>
                       <span className="font-semibold text-red-500">{t.count.toLocaleString()}건</span>
                     </div>
                   ))}
