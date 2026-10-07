@@ -5,14 +5,23 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Trash2, Save, Bell, Loader2, Play, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/features/auth/hooks/use-auth-store";
 
-// 알려진 타입 레이블 (DB에 없는 타입은 type 문자열 그대로 표시)
-const KNOWN_LABELS: Record<string, string> = {
-  leave_notify: "연차사용 촉진 알림",
-  general:      "일반 알림",
+// 알림 삭제 주기 관리에서 관리할 타입 — 순서대로 표시됨
+const ALL_TYPES = [
+  "leave_notify",
+  "approval_review",
+  "approval_result",
+  "approval_cancelled",
+] as const;
+
+const TYPE_LABELS: Record<string, string> = {
+  leave_notify:       "연차사용 촉진 알림",
+  approval_review:    "승인 요청 알림",
+  approval_result:    "승인 결과 알림",
+  approval_cancelled: "승인 취소 알림",
 };
 
 function typeLabel(type: string) {
-  return KNOWN_LABELS[type] ?? type;
+  return TYPE_LABELS[type] ?? type;
 }
 
 const PRESET_DAYS = [7, 14, 30, 60, 90, 180] as const;
@@ -40,7 +49,6 @@ export default function NotificationRetentionPage() {
   const companyCode = user?.companyCode ?? "";
   const userId      = user?.user_id     ?? "";
 
-  const [types, setTypes]     = useState<string[]>([]);
   const [rules, setRules]     = useState<Record<string, RuleState>>({});
   const [counts, setCounts]   = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -59,11 +67,10 @@ export default function NotificationRetentionPage() {
     setLoading(true);
     try {
       const res  = await fetch(`/api/notifications/retention?companyCode=${companyCode}`);
-      const data: { rules: Record<string, ApiRule>; counts: Record<string, number>; types: string[] } = await res.json();
+      const data: { rules: Record<string, ApiRule>; counts: Record<string, number> } = await res.json();
 
-      const dynamicTypes = data.types ?? [];
       const initial: Record<string, RuleState> = {};
-      for (const type of dynamicTypes) {
+      for (const type of ALL_TYPES) {
         const saved = data.rules[type];
         initial[type] = {
           retention_days: saved?.retention_days ?? null,
@@ -71,11 +78,9 @@ export default function NotificationRetentionPage() {
           customValue: saved?.retention_days != null ? String(saved.retention_days) : "",
         };
       }
-      setTypes(dynamicTypes);
       setRules(initial);
       setCounts(data.counts ?? {});
     } catch {
-      setTypes([]);
       setRules({});
     } finally {
       setLoading(false);
@@ -110,7 +115,7 @@ export default function NotificationRetentionPage() {
     if (!companyCode || !userId) return;
     setSaving(true);
     try {
-      const ruleList = types.map((type) => ({
+      const ruleList = ALL_TYPES.map((type) => ({
         type,
         retention_days: rules[type]?.retention_days ?? null,
       }));
@@ -196,14 +201,7 @@ export default function NotificationRetentionPage() {
           </div>
         ) : (
           <>
-            {types.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                <Bell className="w-10 h-10 mb-3 opacity-30" />
-                <p className="text-sm">쌓인 알림이 없습니다</p>
-              </div>
-            )}
-
-            {types.map((type) => {
+            {ALL_TYPES.map((type) => {
               const label = typeLabel(type);
               const rule  = rules[type] ?? { retention_days: null, custom: false, customValue: "" };
               const count = counts[type] ?? 0;

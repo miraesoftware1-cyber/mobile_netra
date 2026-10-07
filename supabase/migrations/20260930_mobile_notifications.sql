@@ -13,3 +13,4 @@ CREATE TABLE IF NOT EXISTS mobile_notifications (
 
 CREATE INDEX IF NOT EXISTS idx_mobile_notif_lookup
     ON mobile_notifications(company_code, emp_code, sent_at DESC);
+ 

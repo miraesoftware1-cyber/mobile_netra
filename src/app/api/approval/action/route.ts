@@ -73,6 +73,14 @@ async function ensureActionsTable() {
   _actionsTableEnsured = true;
 }
 
+async function saveNotif(companyCode: string, empCode: string, title: string, body: string, type: string) {
+  await query(
+    `INSERT INTO mobile_notifications (company_code, emp_code, title, body, type, sent_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())`,
+    [companyCode, empCode, title, body, type],
+  ).catch((e) => console.error('[notif] save failed:', e));
+}
+
 async function pushToEmps(
   corpCode: string, empCodes: string[], title: string, body: string, reqId: number,
   approvalMeta?: { companyCode: string; corpCode: string },
@@ -282,6 +290,9 @@ export async function POST(request: NextRequest) {
           ...nextActive.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
           ...nextSilent.map((row) => sendPushNotification(row.subscription, { ...nextBasePayload, silent: true, approvalAction: { reqId, companyCode, corpCode, empCode: row.emp_code, empName: '' } })),
         ]);
+        await Promise.allSettled([...nextActive, ...nextSilent].map((row) =>
+          saveNotif(companyCode, row.emp_code, msgTitle, msgBody, 'approval_review'),
+        ));
       }
     } catch { /* 무시 */ }
   }
@@ -296,13 +307,17 @@ export async function POST(request: NextRequest) {
         .map((r) => String(r.EMP_CODE ?? ''))
         .filter((c) => c && c !== empCode);
       if (otherCodes.length > 0) {
+        const cancelTitle = '승인 불필요';
+        const cancelBody  = `${getMenuLabel(menuId || '요청')} 요청이 반려 처리되었습니다.`;
         await pushToEmps(
           corpCode, otherCodes,
-          '승인 불필요',
-          `${getMenuLabel(menuId || '요청')} 요청이 반려 처리되었습니다.`,
+          cancelTitle, cancelBody,
           reqId,
           // approvalMeta 없음 → 버튼 없는 알림으로 기존 승인 요청 알림 교체
         );
+        await Promise.allSettled(otherCodes.map((code) =>
+          saveNotif(companyCode, code, cancelTitle, cancelBody, 'approval_cancelled'),
+        ));
       }
     } catch { /* 무시 */ }
   }
@@ -345,15 +360,12 @@ export async function POST(request: NextRequest) {
 
   // 9. 최종 완료 → 요청자에게 푸시
   if ((newStatus === 'APPROVED' || newStatus === 'REJECTED') && reqEmpCode) {
-    const isApproved = newStatus === 'APPROVED';
-    const label = getMenuLabel(menuId || '요청');
-    await pushToEmps(
-      corpCode,
-      [reqEmpCode],
-      isApproved ? '승인 완료' : '반려 처리',
-      isApproved ? `${label} 요청이 최종 승인되었습니다.` : `${label} 요청이 반려되었습니다.`,
-      reqId,
-    );
+    const isApproved  = newStatus === 'APPROVED';
+    const label       = getMenuLabel(menuId || '요청');
+    const resultTitle = isApproved ? '승인 완료' : '반려 처리';
+    const resultBody  = isApproved ? `${label} 요청이 최종 승인되었습니다.` : `${label} 요청이 반려되었습니다.`;
+    await pushToEmps(corpCode, [reqEmpCode], resultTitle, resultBody, reqId);
+    await saveNotif(companyCode, reqEmpCode, resultTitle, resultBody, 'approval_result');
   }
 
   return NextResponse.json({ success: true, newStatus, nextStepNo });
